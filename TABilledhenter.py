@@ -438,19 +438,19 @@ def main_application():
             project_code = downloader.extract_project_code(webkodes[0])
         
         # Project code input
-        st.header("🏷️ Project Configuration")
+        st.header("🏷️ Tjek projekt-koden")
         project_code_input = st.text_input(
-            "Project Code (auto-detected or enter manually)",
+            "Projektkoden bliver hentet automatisk fra prisakr/webskema, men kan tilpasses hvis ikke den bliver genkendt rigtigt.",
             value=project_code,
             help="Format: LLDDDDD (e.g., IC20006) or DDDDD"
         )
         
-        if st.button("🔍 Search for Images", type="primary"):
+        if st.button("🔍 Find billedfiler", type="primary"):
             if not project_code_input:
-                st.error("Please enter a project code")
+                st.error("Projectkode ikke fundet, prøv igen")
                 return
             
-            with st.spinner("Searching for images..."):
+            with st.spinner("Søger efter filer..."):
                 results = downloader.search_images_for_codes(project_code_input, webkodes)
                 st.session_state.search_results = results
         
@@ -459,20 +459,20 @@ def main_application():
             results = st.session_state.search_results
             
             # Summary
-            st.header("📊 Search Results Summary")
+            st.header("📊 Fundede filer")
             col1, col2, col3 = st.columns(3)
             
             with col1:
-                st.metric("Found", len(results['found']))
+                st.metric("Fundet", len(results['found']))
             with col2:
-                st.metric("Missing", len(results['missing']))
+                st.metric("Mangler", len(results['missing']))
             with col3:
                 total_images = sum(len(images) for images in results['found'].values())
-                st.metric("Total Images", total_images)
+                st.metric("Fundet billeder i alt", total_images)
             
             # Display found images
             if results['found']:
-                st.header("✅ Found Images - Select for Download")
+                st.header("✅ vælg de billeder du vil hente ned")
                 
                 all_images = []
                 global_image_counter = 0  # Add global counter for unique keys
@@ -502,7 +502,7 @@ def main_application():
                 # Batch selection controls
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    if st.button("✅ Select All"):
+                    if st.button("✅ Vælg Alle"):
                         # Clear existing selections and select all with new key format
                         st.session_state.selected_images.clear()
                         counter = 0
@@ -514,7 +514,7 @@ def main_application():
                         st.rerun()
                 
                 with col2:
-                    if st.button("❌ Deselect All"):
+                    if st.button("❌ Fravælg Alle"):
                         st.session_state.selected_images.clear()
                         st.rerun()
                 
@@ -523,9 +523,9 @@ def main_application():
                 selected_count = len(all_selected_keys)
                 
                 if selected_count > 0:
-                    st.header(f"⬇️ Download Selected Images ({selected_count})")
+                    st.header(f"⬇️ Hent valgte billeder ({selected_count})")
                     
-                    if st.button("📦 Create Download ZIP", type="primary"):
+                    if st.button("📦 Pak filer i en ZIP fil", type="primary"):
                         selected_images = []
                         counter = 0
                         
@@ -549,11 +549,11 @@ def main_application():
                                             'webkode': webkode
                                         })
                         
-                        with st.spinner("Creating ZIP file..."):
+                        with st.spinner("Pakker dine filer..."):
                             zip_data = create_download_zip(selected_images)
                             
                             st.download_button(
-                                label="💾 Download ZIP File",
+                                label="💾 Download ZIP-Fil",
                                 data=zip_data,
                                 file_name=f"icrt_images_{project_code_input}_{int(time.time())}.zip",
                                 mime="application/zip"
@@ -561,7 +561,7 @@ def main_application():
             
             # Display missing codes and suggestions
             if results['missing']:
-                st.header("❌ Missing Images & Suggestions")
+                st.header("❌ Manglender Billeder")
                 
                 for webkode in results['missing']:
                     if webkode in results.get('suggestions', {}):
