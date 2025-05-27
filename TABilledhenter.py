@@ -159,7 +159,7 @@ class ICRTImageDownloader:
             
             if filename and image_url:
                 # Extract product code
-                product_code = extract_product_code(filename)
+                product_code = downloader.extract_product_code(filename)
                 
                 # Check for match
                 if product_code in webkode_set:
