@@ -250,17 +250,24 @@ def login_screen():
         submitted = st.form_submit_button("Login")
         
         if submitted:
-            # Define your login credentials here
-            VALID_USERNAME = "admin"  # Change this to your desired username  
-            VALID_PASSWORD = "password123"  # Change this to your desired password
-            
-            if username == VALID_USERNAME and password == VALID_PASSWORD:
-                st.session_state.logged_in = True
-                st.rerun()
-            elif username and password:
-                st.error("Invalid username or password")
-            else:
-                st.error("Please enter both username and password")
+            try:
+                # Get credentials from Streamlit secrets
+                valid_username = st.secrets["login"]["username"]
+                valid_password = st.secrets["login"]["password"]
+                
+                if username == valid_username and password == valid_password:
+                    st.session_state.logged_in = True
+                    st.rerun()
+                elif username and password:
+                    st.error("Invalid username or password")
+                else:
+                    st.error("Please enter both username and password")
+                    
+            except KeyError as e:
+                st.error(f"Login configuration error: {e}")
+                st.error("Please contact administrator to configure login credentials.")
+            except Exception as e:
+                st.error(f"Authentication error: {e}")
 
 def api_credentials_screen():
     """Display API credentials input"""
