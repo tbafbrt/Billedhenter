@@ -421,8 +421,10 @@ def main_application():
         "Her kan du bruge både prisark og webskema, filen skal bare have en fane der hedder 'Priser' og en kolonneoverskrift i række 3 der hedder 'Webkode' ",
         type=['xlsx', 'xls']
     )
+    ##############################################
     
     # Display found images and suggestions in merged format
+    results = st.session_state.search_results
     if results['found'] or results['missing']:
         st.header("✅ Vælg de billeder du vil hente ned")
         
@@ -580,6 +582,8 @@ def main_application():
                         file_name=f"icrt_images_{project_code_input}_{int(time.time())}.zip",
                         mime="application/zip"
                     )
+                    
+    #################################################
 
 def main():
     """Main application entry point"""
