@@ -159,7 +159,7 @@ class ICRTImageDownloader:
             
             if filename and image_url:
                 # Extract product code
-                product_code = downloader.extract_product_code(filename)
+                product_code = extract_product_code(filename)
                 
                 # Check for match
                 if product_code in webkode_set:
@@ -423,166 +423,212 @@ def main_application():
     )
     ##############################################
     
-    # Display found images and suggestions in merged format
-    results = st.session_state.search_results
-    if results['found'] or results['missing']:
-        st.header("✅ Vælg de billeder du vil hente ned")
+    if uploaded_file:
+        # Parse Excel file
+        webkodes, error = parse_excel_file(uploaded_file)
         
-        all_images = []
-        global_image_counter = 0  # Add global counter for unique keys
+        if error:
+            st.error(error)
+            return
         
-        # First show all found images
-        for webkode, images in results['found'].items():
-            st.subheader(f"📋 {webkode} ({len(images)} billeder)")
+        st.success(f"Fundet {len(webkodes)} webkoder i Excel-fil")
+        
+        # Extract and display project code
+        project_code = ""
+        if webkodes:
+            project_code = downloader.extract_project_code(webkodes[0])
+        
+        # Project code input
+        st.header("🏷️ Tjek projekt-koden")
+        project_code_input = st.text_input(
+            "Projektkoden bliver hentet automatisk fra prisark/webskema, men kan tilpasses hvis ikke den bliver genkendt rigtigt.",
+            value=project_code,
+            help="Format: LLDDDDD (e.g., IC20006) or DDDDD"
+        )
+        
+        if st.button("🔍 Find billedfiler", type="primary"):
+            if not project_code_input:
+                st.error("Projectkode ikke fundet, prøv igen")
+                return
             
-            # Display images in a more compact format
-            for idx, image in enumerate(images):
-                # Create truly unique key using global counter
-                global_image_counter += 1
-                image_key = f"img_{global_image_counter}_{webkode}_{image['filename']}"
-                
-                # Simple checkbox without preview or size info
-                selected = st.checkbox(
-                    f"📷 {image['filename']}",
-                    key=image_key,
-                    value=image_key in st.session_state.selected_images
-                )
-                
-                if selected:
-                    st.session_state.selected_images.add(image_key)
-                    all_images.append(image)
-                elif image_key in st.session_state.selected_images:
-                    st.session_state.selected_images.remove(image_key)
+            with st.spinner("Søger efter filer..."):
+                results = downloader.search_images_for_codes(project_code_input, webkodes)
+                st.session_state.search_results = results
         
-        # Then show missing codes with suggestions
-        if results['missing']:
-            st.subheader("💡 Foreslåede alternativer for manglende billeder")
+        # Display search results
+        if st.session_state.search_results:
+            results = st.session_state.search_results
             
-            for webkode in results['missing']:
-                if webkode in results.get('suggestions', {}):
-                    # Show missing code with suggestions
-                    st.write(f"🔍 **{webkode}** - Intet direkte match fundet")
-                    suggestions = results['suggestions'][webkode]
+            # Summary
+            st.header("📊 Filer fundet")
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Fundet", len(results['found']))
+            with col2:
+                st.metric("Mangler", len(results['missing']))
+            with col3:
+                total_images = sum(len(images) for images in results['found'].values())
+                st.metric("Fundet billeder i alt", total_images)
+
+            # Display found images and suggestions in merged format
+            if results['found'] or results['missing']:
+                st.header("✅ Vælg de billeder du vil hente ned")
+                
+                all_images = []
+                global_image_counter = 0  # Add global counter for unique keys
+                
+                # First show all found images
+                for webkode, images in results['found'].items():
+                    st.subheader(f"📋 {webkode} ({len(images)} billeder)")
                     
-                    st.write(f"💡 **Fundet {len(suggestions)} alternativer:**")
-                    
-                    # Display suggestions with selection option
-                    for idx, suggestion in enumerate(suggestions):
-                        suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
+                    # Display images in a more compact format
+                    for idx, image in enumerate(images):
+                        # Create truly unique key using global counter
+                        global_image_counter += 1
+                        image_key = f"img_{global_image_counter}_{webkode}_{image['filename']}"
                         
-                        suggested = st.checkbox(
-                            f"📷 {suggestion['filename']} (fra {suggestion['webkode']})",
-                            key=suggestion_key,
-                            value=suggestion_key in st.session_state.selected_images,
-                            help=suggestion['suggestion_reason']
+                        # Simple checkbox without preview or size info
+                        selected = st.checkbox(
+                            f"📷 {image['filename']}",
+                            key=image_key,
+                            value=image_key in st.session_state.selected_images
                         )
                         
-                        if suggested:
-                            st.session_state.selected_images.add(suggestion_key)
-                        elif suggestion_key in st.session_state.selected_images:
-                            st.session_state.selected_images.remove(suggestion_key)
-                else:
-                    # No suggestions available
-                    st.write(f"• **{webkode}** - Ingen alternativer fundet")
-        
-        # Batch selection controls - placed after all images and suggestions
-        st.subheader("🎛️ Vælg flere ad gangen")
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            if st.button("✅ Vælg alle inkl. forslag"):
-                # Clear existing selections and select all (matches + suggestions)
-                st.session_state.selected_images.clear()
-                counter = 0
+                        if selected:
+                            st.session_state.selected_images.add(image_key)
+                            all_images.append(image)
+                        elif image_key in st.session_state.selected_images:
+                            st.session_state.selected_images.remove(image_key)
                 
-                # Select all found images
-                for webkode, images in results['found'].items():
-                    for image in images:
-                        counter += 1
-                        image_key = f"img_{counter}_{webkode}_{image['filename']}"
-                        st.session_state.selected_images.add(image_key)
-                
-                # Select all suggestions
-                if 'suggestions' in results:
-                    for webkode, suggestions in results['suggestions'].items():
-                        for idx, suggestion in enumerate(suggestions):
-                            suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
-                            st.session_state.selected_images.add(suggestion_key)
-                
-                st.rerun()
-        
-        with col2:
-            if st.button("🎯 Vælg kun hele matches"):
-                # Clear existing selections and select only exact matches
-                st.session_state.selected_images.clear()
-                counter = 0
-                
-                # Select only found images (no suggestions)
-                for webkode, images in results['found'].items():
-                    for image in images:
-                        counter += 1
-                        image_key = f"img_{counter}_{webkode}_{image['filename']}"
-                        st.session_state.selected_images.add(image_key)
-                
-                st.rerun()
-        
-        with col3:
-            if st.button("💡 Fravælg forslag"):
-                # Remove only suggestions from selection (keep exact matches)
-                if 'suggestions' in results:
-                    for webkode, suggestions in results['suggestions'].items():
-                        for idx, suggestion in enumerate(suggestions):
-                            suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
-                            st.session_state.selected_images.discard(suggestion_key)
-                
-                st.rerun()
-        
-        with col4:
-            if st.button("❌ Fravælg alle"):
-                st.session_state.selected_images.clear()
-                st.rerun()
-        
-        # Download section - count selected images (including suggestions)
-        all_selected_keys = st.session_state.selected_images
-        selected_count = len(all_selected_keys)
-        
-        if selected_count > 0:
-            st.header(f"⬇️ Hent valgte billeder ({selected_count})")
-            
-            if st.button("📦 Pak filer i en ZIP fil", type="primary"):
-                selected_images = []
-                counter = 0
-                
-                # Rebuild the mapping to find selected images from found results
-                for webkode, images in results['found'].items():
-                    for image in images:
-                        counter += 1
-                        image_key = f"img_{counter}_{webkode}_{image['filename']}"
-                        if image_key in st.session_state.selected_images:
-                            selected_images.append(image)
-                
-                # Also include selected suggestions
-                if 'suggestions' in results:
-                    for webkode, suggestions in results['suggestions'].items():
-                        for idx, suggestion in enumerate(suggestions):
-                            suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
-                            if suggestion_key in st.session_state.selected_images:
-                                selected_images.append({
-                                    'url': suggestion['url'],
-                                    'filename': f"{webkode}_{suggestion['filename']}_suggested",
-                                    'webkode': webkode
-                                })
-                
-                with st.spinner("Pakker dine filer..."):
-                    zip_data = create_download_zip(selected_images)
+                # Then show missing codes with suggestions
+                if results['missing']:
+                    st.subheader("💡 Foreslåede alternativer for manglende billeder")
                     
-                    st.download_button(
-                        label="💾 Download ZIP-Fil",
-                        data=zip_data,
-                        file_name=f"icrt_images_{project_code_input}_{int(time.time())}.zip",
-                        mime="application/zip"
-                    )
+                    for webkode in results['missing']:
+                        if webkode in results.get('suggestions', {}):
+                            # Show missing code with suggestions
+                            st.write(f"🔍 **{webkode}** - Intet direkte match fundet")
+                            suggestions = results['suggestions'][webkode]
+                            
+                            st.write(f"💡 **Fundet {len(suggestions)} alternativer:**")
+                            
+                            # Display suggestions with selection option
+                            for idx, suggestion in enumerate(suggestions):
+                                suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
+                                
+                                suggested = st.checkbox(
+                                    f"📷 {suggestion['filename']} (fra {suggestion['webkode']})",
+                                    key=suggestion_key,
+                                    value=suggestion_key in st.session_state.selected_images,
+                                    help=suggestion['suggestion_reason']
+                                )
+                                
+                                if suggested:
+                                    st.session_state.selected_images.add(suggestion_key)
+                                elif suggestion_key in st.session_state.selected_images:
+                                    st.session_state.selected_images.remove(suggestion_key)
+                        else:
+                            # No suggestions available
+                            st.write(f"• **{webkode}** - Ingen alternativer fundet")
+                
+                # Batch selection controls - placed after all images and suggestions
+                st.subheader("🎛️ Vælg flere ad gangen")
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    if st.button("✅ Vælg alle inkl. forslag"):
+                        # Clear existing selections and select all (matches + suggestions)
+                        st.session_state.selected_images.clear()
+                        counter = 0
+                        
+                        # Select all found images
+                        for webkode, images in results['found'].items():
+                            for image in images:
+                                counter += 1
+                                image_key = f"img_{counter}_{webkode}_{image['filename']}"
+                                st.session_state.selected_images.add(image_key)
+                        
+                        # Select all suggestions
+                        if 'suggestions' in results:
+                            for webkode, suggestions in results['suggestions'].items():
+                                for idx, suggestion in enumerate(suggestions):
+                                    suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
+                                    st.session_state.selected_images.add(suggestion_key)
+                        
+                        st.rerun()
+                
+                with col2:
+                    if st.button("🎯 Vælg kun hele matches"):
+                        # Clear existing selections and select only exact matches
+                        st.session_state.selected_images.clear()
+                        counter = 0
+                        
+                        # Select only found images (no suggestions)
+                        for webkode, images in results['found'].items():
+                            for image in images:
+                                counter += 1
+                                image_key = f"img_{counter}_{webkode}_{image['filename']}"
+                                st.session_state.selected_images.add(image_key)
+                        
+                        st.rerun()
+                
+                with col3:
+                    if st.button("💡 Fravælg forslag"):
+                        # Remove only suggestions from selection (keep exact matches)
+                        if 'suggestions' in results:
+                            for webkode, suggestions in results['suggestions'].items():
+                                for idx, suggestion in enumerate(suggestions):
+                                    suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
+                                    st.session_state.selected_images.discard(suggestion_key)
+                        
+                        st.rerun()
+                
+                with col4:
+                    if st.button("❌ Fravælg alle"):
+                        st.session_state.selected_images.clear()
+                        st.rerun()
+                
+                # Download section - count selected images (including suggestions)
+                all_selected_keys = st.session_state.selected_images
+                selected_count = len(all_selected_keys)
+                
+                if selected_count > 0:
+                    st.header(f"⬇️ Hent valgte billeder ({selected_count})")
                     
+                    if st.button("📦 Pak filer i en ZIP fil", type="primary"):
+                        selected_images = []
+                        counter = 0
+                        
+                        # Rebuild the mapping to find selected images from found results
+                        for webkode, images in results['found'].items():
+                            for image in images:
+                                counter += 1
+                                image_key = f"img_{counter}_{webkode}_{image['filename']}"
+                                if image_key in st.session_state.selected_images:
+                                    selected_images.append(image)
+                        
+                        # Also include selected suggestions
+                        if 'suggestions' in results:
+                            for webkode, suggestions in results['suggestions'].items():
+                                for idx, suggestion in enumerate(suggestions):
+                                    suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
+                                    if suggestion_key in st.session_state.selected_images:
+                                        selected_images.append({
+                                            'url': suggestion['url'],
+                                            'filename': f"{webkode}_{suggestion['filename']}_suggested",
+                                            'webkode': webkode
+                                        })
+                        
+                        with st.spinner("Pakker dine filer..."):
+                            zip_data = create_download_zip(selected_images)
+                            
+                            st.download_button(
+                                label="💾 Download ZIP-Fil",
+                                data=zip_data,
+                                file_name=f"icrt_images_{project_code_input}_{int(time.time())}.zip",
+                                mime="application/zip"
+                            )
     #################################################
 
 def main():
