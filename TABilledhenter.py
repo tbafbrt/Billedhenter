@@ -409,7 +409,7 @@ def create_download_zip(selected_images: List[Dict]) -> bytes:
 
 def main_application():
     """Main application interface"""
-    st.title("📸 ICRT Image Downloader")
+    st.title("📸 T&A Billedhenter")
     
     # Initialize downloader
     downloader = ICRTImageDownloader()
