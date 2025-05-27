@@ -12,7 +12,6 @@ import base64
 # Configure Streamlit page
 st.set_page_config(
     page_title="TA Billedhenter",
-    page_description="Hent billeder fra server",
     page_icon="📸",
     layout="wide"
 )
