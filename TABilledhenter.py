@@ -309,13 +309,13 @@ def login_screen():
 
 def api_credentials_screen():
     """Display API credentials input"""
-    st.title("🔑 API Authentication")
-    st.markdown("Enter your ICRT API credentials to access the image database.")
+    st.title("🔑 API adgang")
+    st.markdown("Indsæt API koder.")
     
     with st.form("api_credentials"):
         client_id = st.text_input("Client ID")
         client_key = st.text_input("Client Key", type="password")
-        submitted = st.form_submit_button("Authenticate")
+        submitted = st.form_submit_button("Godkend")
         
         if submitted:
             if client_id and client_key:
