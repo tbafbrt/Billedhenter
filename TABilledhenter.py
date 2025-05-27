@@ -409,16 +409,16 @@ def create_download_zip(selected_images: List[Dict]) -> bytes:
 
 def main_application():
     """Main application interface"""
-    st.title("📸 TA Billedhenter")
+    st.title("🚚 TA Billedhenter")
     
     # Initialize downloader
     downloader = ICRTImageDownloader()
     downloader.jwt_token = st.session_state.jwt_token
     
     # File upload section
-    st.header("📁 Upload Excel File")
+    st.header("📃 Upload dit prisark eller webskema")
     uploaded_file = st.file_uploader(
-        "Choose Excel file with 'Priser' sheet containing 'Webkode' column",
+        "Her kan du bruge både prisark og webskema, filen skal bare have en fane der hedder 'Priser' og en kolonneoverskrift i række 3 der hedder 'Webkode' ",
         type=['xlsx', 'xls']
     )
     
