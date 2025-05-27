@@ -11,7 +11,8 @@ import base64
 
 # Configure Streamlit page
 st.set_page_config(
-    page_title="ICRT Image Downloader",
+    page_title="T&A Billedhenter",
+    page_description="Hent billeder fra server",
     page_icon="📸",
     layout="wide"
 )
@@ -128,11 +129,11 @@ class ICRTImageDownloader:
         # Extract media data
         project_data = response.get('data', {}).get('project', {})
         if not project_data:
-            st.warning(f"No project found with code: {project_code}")
+            st.warning(f"Intet project fundet med koden: {project_code}")
             return results
         
         media_files = project_data.get('media', [])
-        st.write(f"📊 Found {len(media_files)} total media files in project")
+        st.write(f"📊 Fundet {len(media_files)} Samlet antal billeder")
         
         # Use the proven extract_product_code function
         def extract_product_code(filename):
@@ -332,6 +333,7 @@ def api_credentials_screen():
                         st.error(message)
             else:
                 st.error("Please enter both Client ID and Client Key")
+
 
 def parse_excel_file(uploaded_file) -> Tuple[Optional[List[str]], Optional[str]]:
     """Parse Excel file and extract webkodes"""
