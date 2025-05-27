@@ -199,7 +199,7 @@ class ICRTImageDownloader:
                     if len(parts) >= 3:  # Format: LLDDDDD-DDDD-DD
                         base_product = '-'.join(parts[:-1])  # e.g., "OT18486-0047"
                         
-                        st.write(f"🔍 Looking for alternatives to missing {clean_webkode} (base: {base_product})")
+                        st.write(f"🔍 Foreslag til alternativer til {clean_webkode} (baseret på: {base_product})")
                         
                         # Search through ALL media files for variants of this base product
                         variant_suggestions = []
@@ -231,11 +231,11 @@ class ICRTImageDownloader:
                             if 'suggestions' not in results:
                                 results['suggestions'] = {}
                             results['suggestions'][clean_webkode] = variant_suggestions
-                            st.write(f"✅ Found {len(variant_suggestions)} variant alternatives for {clean_webkode}")
+                            st.write(f"✅ Fundet {len(variant_suggestions)} alternativ(-er) til {clean_webkode}")
                         else:
                             st.write(f"❌ No variant alternatives found for {clean_webkode}")
         
-        st.success(f"🎯 Search completed: Found {found_count} total images for {len(results['found'])} webkodes")
+        st.success(f"🎯 Søgning afsluttet: Fundet {found_count} billeder {len(results['found'])} webkoder")
         
         return results
 
@@ -430,7 +430,7 @@ def main_application():
             st.error(error)
             return
         
-        st.success(f"Found {len(webkodes)} webkodes in Excel file")
+        st.success(f"Fundet {len(webkodes)} webkoder i Excel fil")
         
         # Extract and display project code
         project_code = ""
@@ -459,7 +459,7 @@ def main_application():
             results = st.session_state.search_results
             
             # Summary
-            st.header("📊 Fundede filer")
+            st.header("📊 Filer fundet")
             col1, col2, col3 = st.columns(3)
             
             with col1:
@@ -478,7 +478,7 @@ def main_application():
                 global_image_counter = 0  # Add global counter for unique keys
                 
                 for webkode, images in results['found'].items():
-                    st.subheader(f"📋 {webkode} ({len(images)} images)")
+                    st.subheader(f"📋 {webkode} ({len(images)} billeder)")
                     
                     # Display images in a more compact format
                     for idx, image in enumerate(images):
@@ -561,15 +561,15 @@ def main_application():
             
             # Display missing codes and suggestions
             if results['missing']:
-                st.header("❌ Manglender Billeder")
+                st.header("❌ Manglende Billeder")
                 
                 for webkode in results['missing']:
                     if webkode in results.get('suggestions', {}):
                         # Show missing code with suggestions
-                        st.write(f"🔍 **{webkode}** - No direct match found")
+                        st.write(f"🔍 **{webkode}** - Intet direkte match fundet")
                         suggestions = results['suggestions'][webkode]
                         
-                        st.write(f"💡 **Found {len(suggestions)} suggested alternatives:**")
+                        st.write(f"💡 **Fundet {len(suggestions)} alternativer:**")
                         
                         # Display suggestions with selection option
                         for idx, suggestion in enumerate(suggestions):
@@ -590,7 +590,7 @@ def main_application():
                         st.write("---")
                     else:
                         # No suggestions available
-                        st.write(f"• {webkode} - No images or alternatives found")
+                        st.write(f"• {webkode} - Ingen alternativer fundet")
 
 def main():
     """Main application entry point"""
@@ -606,16 +606,16 @@ def main():
     
     # Sidebar with logout option
     with st.sidebar:
-        st.header("🔧 Options")
-        if st.button("🚪 Logout"):
+        st.header("	🕹️ Menu")
+        if st.button("👋 Log ud"):
             # Clear all session state
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
             st.rerun()
         
         st.markdown("---")
-        st.markdown("**Status:** ✅ Authenticated")
-        st.markdown("**API:** 🟢 Connected")
+        st.markdown("**Status:** ✅ Logeget ind")
+        st.markdown("**API:** 🟢 Forbundet")
     
     # Main application
     main_application()
