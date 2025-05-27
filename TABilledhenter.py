@@ -132,7 +132,7 @@ class ICRTImageDownloader:
             return results
         
         media_files = project_data.get('media', [])
-        st.write(f"📊 Fundet {len(media_files)} Samlet antal billeder")
+        st.write(f"📊 Samlet antal billeder fundet {len(media_files)} ")
         
         # Use the proven extract_product_code function
         def extract_product_code(filename):
@@ -235,7 +235,7 @@ class ICRTImageDownloader:
                         else:
                             st.write(f"❌ No variant alternatives found for {clean_webkode}")
         
-        st.success(f"🎯 Søgning afsluttet: Fundet {found_count} billeder {len(results['found'])} webkoder")
+        st.success(f"🎯 Søgning afsluttet: Fundet {found_count} billeder til i alt {len(results['found'])} webkoder")
         
         return results
 
@@ -430,7 +430,7 @@ def main_application():
             st.error(error)
             return
         
-        st.success(f"Fundet {len(webkodes)} webkoder i Excel fil")
+        st.success(f"Fundet {len(webkodes)} webkoder i Excel-fil")
         
         # Extract and display project code
         project_code = ""
@@ -440,7 +440,7 @@ def main_application():
         # Project code input
         st.header("🏷️ Tjek projekt-koden")
         project_code_input = st.text_input(
-            "Projektkoden bliver hentet automatisk fra prisakr/webskema, men kan tilpasses hvis ikke den bliver genkendt rigtigt.",
+            "Projektkoden bliver hentet automatisk fra prisark/webskema, men kan tilpasses hvis ikke den bliver genkendt rigtigt.",
             value=project_code,
             help="Format: LLDDDDD (e.g., IC20006) or DDDDD"
         )
@@ -469,6 +469,39 @@ def main_application():
             with col3:
                 total_images = sum(len(images) for images in results['found'].values())
                 st.metric("Fundet billeder i alt", total_images)
+            
+            # Display missing codes and suggestions
+            if results['missing']:
+                st.header("❌ Manglende Billeder")
+                
+                for webkode in results['missing']:
+                    if webkode in results.get('suggestions', {}):
+                        # Show missing code with suggestions
+                        st.write(f"🔍 **{webkode}** - Intet direkte match fundet")
+                        suggestions = results['suggestions'][webkode]
+                        
+                        st.write(f"💡 **Fundet {len(suggestions)} alternativer:**")
+                        
+                        # Display suggestions with selection option
+                        for idx, suggestion in enumerate(suggestions):
+                            suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
+                            
+                            suggested = st.checkbox(
+                                f"📷 {suggestion['filename']} (from {suggestion['webkode']})",
+                                key=suggestion_key,
+                                value=suggestion_key in st.session_state.selected_images,
+                                help=suggestion['suggestion_reason']
+                            )
+                            
+                            if suggested:
+                                st.session_state.selected_images.add(suggestion_key)
+                            elif suggestion_key in st.session_state.selected_images:
+                                st.session_state.selected_images.remove(suggestion_key)
+                        
+                        st.write("---")
+                    else:
+                        # No suggestions available
+                        st.write(f"• {webkode} - Ingen alternativer fundet")
             
             # Display found images
             if results['found']:
@@ -559,38 +592,7 @@ def main_application():
                                 mime="application/zip"
                             )
             
-            # Display missing codes and suggestions
-            if results['missing']:
-                st.header("❌ Manglende Billeder")
-                
-                for webkode in results['missing']:
-                    if webkode in results.get('suggestions', {}):
-                        # Show missing code with suggestions
-                        st.write(f"🔍 **{webkode}** - Intet direkte match fundet")
-                        suggestions = results['suggestions'][webkode]
-                        
-                        st.write(f"💡 **Fundet {len(suggestions)} alternativer:**")
-                        
-                        # Display suggestions with selection option
-                        for idx, suggestion in enumerate(suggestions):
-                            suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
-                            
-                            suggested = st.checkbox(
-                                f"📷 {suggestion['filename']} (from {suggestion['webkode']})",
-                                key=suggestion_key,
-                                value=suggestion_key in st.session_state.selected_images,
-                                help=suggestion['suggestion_reason']
-                            )
-                            
-                            if suggested:
-                                st.session_state.selected_images.add(suggestion_key)
-                            elif suggestion_key in st.session_state.selected_images:
-                                st.session_state.selected_images.remove(suggestion_key)
-                        
-                        st.write("---")
-                    else:
-                        # No suggestions available
-                        st.write(f"• {webkode} - Ingen alternativer fundet")
+            
 
 def main():
     """Main application entry point"""
@@ -614,7 +616,7 @@ def main():
             st.rerun()
         
         st.markdown("---")
-        st.markdown("**Status:** ✅ Logeget ind")
+        st.markdown("**Status:** ✅ Logget ind")
         st.markdown("**API:** 🟢 Forbundet")
     
     # Main application
