@@ -244,6 +244,29 @@ def login_screen():
     st.title("🔐 ICRT Image Downloader Login")
     st.markdown("Please enter your credentials to access the application.")
     
+    # Debug: Show secrets configuration status
+    with st.expander("🔧 Debug: Secrets Configuration", expanded=False):
+        try:
+            if hasattr(st, 'secrets'):
+                st.write("✅ Streamlit secrets are available")
+                if "login" in st.secrets:
+                    st.write("✅ 'login' section found in secrets")
+                    if "username" in st.secrets["login"]:
+                        st.write(f"✅ Username configured: '{st.secrets['login']['username']}'")
+                    else:
+                        st.write("❌ 'username' not found in login secrets")
+                    if "password" in st.secrets["login"]:
+                        st.write("✅ Password configured (hidden)")
+                    else:
+                        st.write("❌ 'password' not found in login secrets")
+                else:
+                    st.write("❌ 'login' section not found in secrets")
+                    st.write(f"Available sections: {list(st.secrets.keys())}")
+            else:
+                st.write("❌ Streamlit secrets not available")
+        except Exception as e:
+            st.write(f"❌ Error checking secrets: {e}")
+    
     with st.form("login_form"):
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
@@ -255,17 +278,31 @@ def login_screen():
                 valid_username = st.secrets["login"]["username"]
                 valid_password = st.secrets["login"]["password"]
                 
+                # Debug output (remove after fixing)
+                st.write(f"🔍 Debug: Comparing '{username}' with expected username")
+                st.write(f"🔍 Debug: Password lengths - entered: {len(password)}, expected: {len(valid_password)}")
+                
                 if username == valid_username and password == valid_password:
                     st.session_state.logged_in = True
+                    st.success("Login successful!")
+                    time.sleep(1)
                     st.rerun()
                 elif username and password:
                     st.error("Invalid username or password")
+                    st.write(f"🔍 Username match: {username == valid_username}")
+                    st.write(f"🔍 Password match: {password == valid_password}")
                 else:
                     st.error("Please enter both username and password")
                     
             except KeyError as e:
-                st.error(f"Login configuration error: {e}")
-                st.error("Please contact administrator to configure login credentials.")
+                st.error(f"Login configuration error: Missing key {e}")
+                st.error("Please check your Streamlit secrets configuration.")
+                st.code("""
+Expected secrets format:
+[login]
+username = "your_username"
+password = "your_password"
+                """)
             except Exception as e:
                 st.error(f"Authentication error: {e}")
 
