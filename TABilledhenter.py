@@ -241,31 +241,10 @@ class ICRTImageDownloader:
 
 def login_screen():
     """Display login screen"""
-    st.title("🔐 ICRT Image Downloader Login")
-    st.markdown("Please enter your credentials to access the application.")
+    st.title("🔐 T&A billedhenter Login")
+    st.markdown("Skriv dine loginoplysninger for at fortsætte.")
     
-    # Debug: Show secrets configuration status
-    with st.expander("🔧 Debug: Secrets Configuration", expanded=False):
-        try:
-            if hasattr(st, 'secrets'):
-                st.write("✅ Streamlit secrets are available")
-                if "login" in st.secrets:
-                    st.write("✅ 'login' section found in secrets")
-                    if "username" in st.secrets["login"]:
-                        st.write(f"✅ Username configured: '{st.secrets['login']['username']}'")
-                    else:
-                        st.write("❌ 'username' not found in login secrets")
-                    if "password" in st.secrets["login"]:
-                        st.write("✅ Password configured (hidden)")
-                    else:
-                        st.write("❌ 'password' not found in login secrets")
-                else:
-                    st.write("❌ 'login' section not found in secrets")
-                    st.write(f"Available sections: {list(st.secrets.keys())}")
-            else:
-                st.write("❌ Streamlit secrets not available")
-        except Exception as e:
-            st.write(f"❌ Error checking secrets: {e}")
+    
     
     with st.form("login_form"):
         username = st.text_input("Username")
@@ -298,13 +277,35 @@ def login_screen():
                 st.error(f"Login configuration error: Missing key {e}")
                 st.error("Please check your Streamlit secrets configuration.")
                 st.code("""
-Expected secrets format:
-[login]
-username = "your_username"
-password = "your_password"
+                    Expected secrets format:
+                    [login]
+                    username = "your_username"
+                    password = "your_password"
                 """)
             except Exception as e:
                 st.error(f"Authentication error: {e}")
+    # Debug: Show secrets configuration status
+    with st.expander("🔧 Debug: Secrets Configuration", expanded=False):
+        try:
+            if hasattr(st, 'secrets'):
+                st.write("✅ Streamlit secrets are available")
+                if "login" in st.secrets:
+                    st.write("✅ 'login' section found in secrets")
+                    if "username" in st.secrets["login"]:
+                        st.write(f"✅ Username configured: '{st.secrets['login']['username']}'")
+                    else:
+                        st.write("❌ 'username' not found in login secrets")
+                    if "password" in st.secrets["login"]:
+                        st.write("✅ Password configured (hidden)")
+                    else:
+                        st.write("❌ 'password' not found in login secrets")
+                else:
+                    st.write("❌ 'login' section not found in secrets")
+                    st.write(f"Available sections: {list(st.secrets.keys())}")
+            else:
+                st.write("❌ Streamlit secrets not available")
+        except Exception as e:
+            st.write(f"❌ Error checking secrets: {e}")
 
 def api_credentials_screen():
     """Display API credentials input"""
