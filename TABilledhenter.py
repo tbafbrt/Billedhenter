@@ -11,7 +11,7 @@ import base64
 
 # Configure Streamlit page
 st.set_page_config(
-    page_title="T&A Billedhenter",
+    page_title="TA Billedhenter",
     page_description="Hent billeder fra server",
     page_icon="📸",
     layout="wide"
@@ -409,7 +409,7 @@ def create_download_zip(selected_images: List[Dict]) -> bytes:
 
 def main_application():
     """Main application interface"""
-    st.title("📸 T&A Billedhenter")
+    st.title("📸 TA Billedhenter")
     
     # Initialize downloader
     downloader = ICRTImageDownloader()
