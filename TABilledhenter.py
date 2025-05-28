@@ -244,8 +244,6 @@ def login_screen():
     st.title("🔐 T&A billedhenter Login")
     st.markdown("Skriv dine loginoplysninger for at fortsætte.")
     
-    
-    
     with st.form("login_form"):
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
@@ -284,6 +282,7 @@ def login_screen():
                 """)
             except Exception as e:
                 st.error(f"Authentication error: {e}")
+    
     # Debug: Show secrets configuration status
     with st.expander("🔧 Debug: Secrets Configuration", expanded=False):
         try:
@@ -333,7 +332,6 @@ def api_credentials_screen():
                         st.error(message)
             else:
                 st.error("Please enter both Client ID and Client Key")
-
 
 def parse_excel_file(uploaded_file) -> Tuple[Optional[List[str]], Optional[str]]:
     """Parse Excel file and extract webkodes"""
@@ -421,7 +419,6 @@ def main_application():
         "Her kan du bruge både prisark og webskema, filen skal bare have en fane der hedder 'Priser' og en kolonneoverskrift i række 3 der hedder 'Webkode' ",
         type=['xlsx', 'xls']
     )
-    ##############################################
     
     if uploaded_file:
         # Parse Excel file
@@ -532,6 +529,13 @@ def main_application():
                             # No suggestions available
                             st.write(f"• **{webkode}** - Ingen alternativer fundet")
                 
+                # Add rename option for alternatives
+                st.subheader("⚙️ Indstillinger")
+                rename_alternatives = st.checkbox(
+                    "🔄 Omdøb alternative filer til det ønskede variant-nummer",
+                    help="Eksempel: AB23456-0023-00_01 → AB23456-0023-50_01 hvis du søgte efter AB23456-0023-50"
+                )
+                
                 # Batch selection controls - placed after all images and suggestions
                 st.subheader("🎛️ Vælg flere ad gangen")
                 col1, col2, col3, col4 = st.columns(4)
@@ -596,7 +600,7 @@ def main_application():
                 if selected_count > 0:
                     st.header(f"⬇️ Hent valgte billeder ({selected_count})")
                     
-                    if st.button("📦 Pak filer i en ZIP fil", type="primary"):
+                    if st.button("📦 Pak og download ZIP fil", type="primary"):
                         selected_images = []
                         counter = 0
                         
@@ -608,15 +612,48 @@ def main_application():
                                 if image_key in st.session_state.selected_images:
                                     selected_images.append(image)
                         
-                        # Also include selected suggestions
+                        # Also include selected suggestions (with optional renaming)
                         if 'suggestions' in results:
                             for webkode, suggestions in results['suggestions'].items():
                                 for idx, suggestion in enumerate(suggestions):
                                     suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
                                     if suggestion_key in st.session_state.selected_images:
+                                        # Determine filename
+                                        if rename_alternatives:
+                                            # Extract the original variant from the searched webkode
+                                            if '-' in webkode:
+                                                parts = webkode.split('-')
+                                                if len(parts) >= 3:
+                                                    desired_variant = parts[-1]  # e.g., "50"
+                                                    
+                                                    # Replace the variant in the filename
+                                                    original_filename = suggestion['filename']
+                                                    if '_' in original_filename:
+                                                        base_part = original_filename.split('_')[0]  # e.g., "AB23456-0023-00"
+                                                        suffix_part = original_filename.split('_')[1]  # e.g., "01"
+                                                        
+                                                        # Replace the last variant part
+                                                        if '-' in base_part:
+                                                            base_parts = base_part.split('-')
+                                                            if len(base_parts) >= 3:
+                                                                base_parts[-1] = desired_variant  # Replace "00" with "50"
+                                                                new_filename = '-'.join(base_parts) + '_' + suffix_part
+                                                            else:
+                                                                new_filename = f"{webkode}_{original_filename}_renamed"
+                                                        else:
+                                                            new_filename = f"{webkode}_{original_filename}_renamed"
+                                                    else:
+                                                        new_filename = f"{webkode}_{original_filename}_renamed"
+                                                else:
+                                                    new_filename = f"{webkode}_{suggestion['filename']}_suggested"
+                                            else:
+                                                new_filename = f"{webkode}_{suggestion['filename']}_suggested"
+                                        else:
+                                            new_filename = f"{webkode}_{suggestion['filename']}_suggested"
+                                        
                                         selected_images.append({
                                             'url': suggestion['url'],
-                                            'filename': f"{webkode}_{suggestion['filename']}_suggested",
+                                            'filename': new_filename,
                                             'webkode': webkode
                                         })
                         
@@ -624,12 +661,13 @@ def main_application():
                             zip_data = create_download_zip(selected_images)
                             
                             st.download_button(
-                                label="💾 Download ZIP-Fil",
+                                label="💾 Klik her hvis download ikke starter automatisk",
                                 data=zip_data,
                                 file_name=f"icrt_images_{project_code_input}_{int(time.time())}.zip",
-                                mime="application/zip"
+                                mime="application/zip",
+                                use_container_width=True
                             )
-    #################################################
+                            st.success("✅ ZIP fil er klar til download!")
 
 def main():
     """Main application entry point"""
@@ -645,7 +683,7 @@ def main():
     
     # Sidebar with logout option
     with st.sidebar:
-        st.header("	🕹️ Menu")
+        st.header("🕹️ Menu")
         if st.button("👋 Log ud"):
             # Clear all session state
             for key in list(st.session_state.keys()):
