@@ -564,11 +564,21 @@ def main_application():
                             
                             st.write(f"💡 **Fundet {len(suggestions)} alternativer:**")
                             
-                            # Detect duplicates within suggestions
+                            # Debug: Show what we're working with
+                            st.write(f"🔍 Debug: Tjekker {len(suggestions)} forslag for dubletter")
+                            
+                            # Detect duplicates within suggestions - collect all filenames first
+                            suggestion_filenames = [suggestion['filename'] for suggestion in suggestions]
                             suggestion_filename_counts = {}
-                            for suggestion in suggestions:
-                                filename = suggestion['filename']
+                            for filename in suggestion_filenames:
                                 suggestion_filename_counts[filename] = suggestion_filename_counts.get(filename, 0) + 1
+                            
+                            # Debug: Show duplicate counts
+                            duplicates_found = [filename for filename, count in suggestion_filename_counts.items() if count > 1]
+                            if duplicates_found:
+                                st.write(f"🔄 Debug: Fundet dubletter: {duplicates_found}")
+                            else:
+                                st.write("✅ Debug: Ingen dubletter fundet")
                             
                             # Display suggestions with selection option
                             suggestion_filename_occurrence = {}
@@ -584,17 +594,21 @@ def main_application():
                                 
                                 # Add duplicate indicator if needed
                                 is_duplicate = suggestion_filename_counts[filename] > 1
+                                occurrence_number = suggestion_filename_occurrence[filename]
+                                
                                 if is_duplicate:
-                                    duplicate_suffix = f" (kopi #{suggestion_filename_occurrence[filename]})"
+                                    duplicate_suffix = f" (kopi #{occurrence_number})"
                                     display_name = f"🔄 {suggestion['filename']}{duplicate_suffix} (fra {suggestion['webkode']})"
+                                    help_text = f"{suggestion['suggestion_reason']} - Duplikat #{occurrence_number} af {suggestion_filename_counts[filename]}"
                                 else:
                                     display_name = f"📷 {suggestion['filename']} (fra {suggestion['webkode']})"
+                                    help_text = suggestion['suggestion_reason']
                                 
                                 suggested = st.checkbox(
                                     display_name,
                                     key=suggestion_key,
                                     value=suggestion_key in st.session_state.selected_images,
-                                    help=f"{suggestion['suggestion_reason']} - Duplikat fundet" if is_duplicate else suggestion['suggestion_reason']
+                                    help=help_text
                                 )
                                 
                                 if suggested:
