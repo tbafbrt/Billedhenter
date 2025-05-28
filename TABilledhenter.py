@@ -636,31 +636,38 @@ def main_application():
                         st.session_state.selected_images.clear()
                         counter = 0
                         
-                        # Select all found images
-                        for webkode, images in results['found'].items():
-                            for image in images:
+                        # Select all found images (using sorted data)
+                        sorted_found_items = sorted(results['found'].items())
+                        for webkode, images in sorted_found_items:
+                            sorted_images = sorted(images, key=lambda x: x['filename'])
+                            for image in sorted_images:
                                 counter += 1
                                 image_key = f"img_{counter}_{webkode}_{image['filename']}"
                                 st.session_state.selected_images.add(image_key)
                         
-                        # Select all suggestions
+                        # Select all suggestions (using sorted data)
                         if 'suggestions' in results:
-                            for webkode, suggestions in results['suggestions'].items():
-                                for idx, suggestion in enumerate(suggestions):
-                                    suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
-                                    st.session_state.selected_images.add(suggestion_key)
+                            sorted_missing = sorted(results['missing'])
+                            for webkode in sorted_missing:
+                                if webkode in results['suggestions']:
+                                    sorted_suggestions = sorted(results['suggestions'][webkode], key=lambda x: x['filename'])
+                                    for idx, suggestion in enumerate(sorted_suggestions):
+                                        suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
+                                        st.session_state.selected_images.add(suggestion_key)
                         
                         st.rerun()
                 
                 with col2:
                     if st.button("🎯 Vælg kun hele matches"):
-                        # Clear existing selections and select only exact matches
+                        # Clear existing selections and select only exact matches (using sorted data)
                         st.session_state.selected_images.clear()
                         counter = 0
                         
                         # Select only found images (no suggestions)
-                        for webkode, images in results['found'].items():
-                            for image in images:
+                        sorted_found_items = sorted(results['found'].items())
+                        for webkode, images in sorted_found_items:
+                            sorted_images = sorted(images, key=lambda x: x['filename'])
+                            for image in sorted_images:
                                 counter += 1
                                 image_key = f"img_{counter}_{webkode}_{image['filename']}"
                                 st.session_state.selected_images.add(image_key)
@@ -672,17 +679,19 @@ def main_application():
                         # Remove duplicates from selection (keep only copy #1 of each duplicate)
                         keys_to_remove = set()
                         
-                        # Check found images for duplicates
-                        for webkode, images in results['found'].items():
+                        # Check found images for duplicates (using sorted data)
+                        sorted_found_items = sorted(results['found'].items())
+                        counter = 0
+                        for webkode, images in sorted_found_items:
+                            sorted_images = sorted(images, key=lambda x: x['filename'])
                             filename_counts = {}
-                            for image in images:
+                            for image in sorted_images:
                                 filename = image['filename']
                                 filename_counts[filename] = filename_counts.get(filename, 0) + 1
                             
                             # Find keys for duplicates (copy #2, #3, etc.)
                             filename_occurrence = {}
-                            counter = 0
-                            for image in images:
+                            for image in sorted_images:
                                 counter += 1
                                 filename = image['filename']
                                 
@@ -695,27 +704,30 @@ def main_application():
                                     image_key = f"img_{counter}_{webkode}_{image['filename']}"
                                     keys_to_remove.add(image_key)
                         
-                        # Check suggestions for duplicates
+                        # Check suggestions for duplicates (using sorted data)
                         if 'suggestions' in results:
-                            for webkode, suggestions in results['suggestions'].items():
-                                suggestion_filename_counts = {}
-                                for suggestion in suggestions:
-                                    filename = suggestion['filename']
-                                    suggestion_filename_counts[filename] = suggestion_filename_counts.get(filename, 0) + 1
-                                
-                                # Find keys for suggestion duplicates
-                                suggestion_filename_occurrence = {}
-                                for idx, suggestion in enumerate(suggestions):
-                                    filename = suggestion['filename']
+                            sorted_missing = sorted(results['missing'])
+                            for webkode in sorted_missing:
+                                if webkode in results['suggestions']:
+                                    sorted_suggestions = sorted(results['suggestions'][webkode], key=lambda x: x['filename'])
+                                    suggestion_filename_counts = {}
+                                    for suggestion in sorted_suggestions:
+                                        filename = suggestion['filename']
+                                        suggestion_filename_counts[filename] = suggestion_filename_counts.get(filename, 0) + 1
                                     
-                                    if filename not in suggestion_filename_occurrence:
-                                        suggestion_filename_occurrence[filename] = 0
-                                    suggestion_filename_occurrence[filename] += 1
-                                    
-                                    # If this is a duplicate (copy #2 or higher), mark for removal
-                                    if suggestion_filename_counts[filename] > 1 and suggestion_filename_occurrence[filename] > 1:
-                                        suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
-                                        keys_to_remove.add(suggestion_key)
+                                    # Find keys for suggestion duplicates
+                                    suggestion_filename_occurrence = {}
+                                    for idx, suggestion in enumerate(sorted_suggestions):
+                                        filename = suggestion['filename']
+                                        
+                                        if filename not in suggestion_filename_occurrence:
+                                            suggestion_filename_occurrence[filename] = 0
+                                        suggestion_filename_occurrence[filename] += 1
+                                        
+                                        # If this is a duplicate (copy #2 or higher), mark for removal
+                                        if suggestion_filename_counts[filename] > 1 and suggestion_filename_occurrence[filename] > 1:
+                                            suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
+                                            keys_to_remove.add(suggestion_key)
                         
                         # Remove the duplicate keys
                         for key in keys_to_remove:
@@ -741,8 +753,10 @@ def main_application():
                         
                         # Rebuild the mapping to find selected images from found results
                         duplicate_counter = {}
-                        for webkode, images in results['found'].items():
-                            for image in images:
+                        sorted_found_items = sorted(results['found'].items())
+                        for webkode, images in sorted_found_items:
+                            sorted_images = sorted(images, key=lambda x: x['filename'])
+                            for image in sorted_images:
                                 counter += 1
                                 image_key = f"img_{counter}_{webkode}_{image['filename']}"
                                 if image_key in st.session_state.selected_images:
@@ -762,56 +776,59 @@ def main_application():
                         
                         # Also include selected suggestions (with optional renaming)
                         if 'suggestions' in results:
-                            for webkode, suggestions in results['suggestions'].items():
-                                for idx, suggestion in enumerate(suggestions):
-                                    suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
-                                    if suggestion_key in st.session_state.selected_images:
-                                        # Determine filename
-                                        if rename_alternatives:
-                                            # Extract the original variant from the searched webkode
-                                            if '-' in webkode:
-                                                parts = webkode.split('-')
-                                                if len(parts) >= 3:
-                                                    desired_variant = parts[-1]  # e.g., "50"
-                                                    
-                                                    # Replace the variant in the filename
-                                                    original_filename = suggestion['filename']
-                                                    if '_' in original_filename:
-                                                        base_part = original_filename.split('_')[0]  # e.g., "AB23456-0023-00"
-                                                        suffix_part = original_filename.split('_')[1]  # e.g., "01"
+                            sorted_missing = sorted(results['missing'])
+                            for webkode in sorted_missing:
+                                if webkode in results['suggestions']:
+                                    sorted_suggestions = sorted(results['suggestions'][webkode], key=lambda x: x['filename'])
+                                    for idx, suggestion in enumerate(sorted_suggestions):
+                                        suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
+                                        if suggestion_key in st.session_state.selected_images:
+                                            # Determine filename
+                                            if rename_alternatives:
+                                                # Extract the original variant from the searched webkode
+                                                if '-' in webkode:
+                                                    parts = webkode.split('-')
+                                                    if len(parts) >= 3:
+                                                        desired_variant = parts[-1]  # e.g., "50"
                                                         
-                                                        # Replace the last variant part
-                                                        if '-' in base_part:
-                                                            base_parts = base_part.split('-')
-                                                            if len(base_parts) >= 3:
-                                                                base_parts[-1] = desired_variant  # Replace "00" with "50"
-                                                                new_filename = '-'.join(base_parts) + '_' + suffix_part
+                                                        # Replace the variant in the filename
+                                                        original_filename = suggestion['filename']
+                                                        if '_' in original_filename:
+                                                            base_part = original_filename.split('_')[0]  # e.g., "AB23456-0023-00"
+                                                            suffix_part = original_filename.split('_')[1]  # e.g., "01"
+                                                            
+                                                            # Replace the last variant part
+                                                            if '-' in base_part:
+                                                                base_parts = base_part.split('-')
+                                                                if len(base_parts) >= 3:
+                                                                    base_parts[-1] = desired_variant  # Replace "00" with "50"
+                                                                    new_filename = '-'.join(base_parts) + '_' + suffix_part
+                                                                else:
+                                                                    new_filename = f"{webkode}_{original_filename}_renamed"
                                                             else:
                                                                 new_filename = f"{webkode}_{original_filename}_renamed"
                                                         else:
                                                             new_filename = f"{webkode}_{original_filename}_renamed"
                                                     else:
-                                                        new_filename = f"{webkode}_{original_filename}_renamed"
+                                                        new_filename = f"{webkode}_{suggestion['filename']}_suggested"
                                                 else:
                                                     new_filename = f"{webkode}_{suggestion['filename']}_suggested"
                                             else:
                                                 new_filename = f"{webkode}_{suggestion['filename']}_suggested"
-                                        else:
-                                            new_filename = f"{webkode}_{suggestion['filename']}_suggested"
-                                        
-                                        # Handle duplicates for suggestions too
-                                        if new_filename in duplicate_counter:
-                                            duplicate_counter[new_filename] += 1
-                                            final_filename = f"{new_filename}_kopi{duplicate_counter[new_filename]}"
-                                        else:
-                                            duplicate_counter[new_filename] = 0
-                                            final_filename = new_filename
-                                        
-                                        selected_images.append({
-                                            'url': suggestion['url'],
-                                            'filename': final_filename,
-                                            'webkode': webkode
-                                        })
+                                            
+                                            # Handle duplicates for suggestions too
+                                            if new_filename in duplicate_counter:
+                                                duplicate_counter[new_filename] += 1
+                                                final_filename = f"{new_filename}_kopi{duplicate_counter[new_filename]}"
+                                            else:
+                                                duplicate_counter[new_filename] = 0
+                                                final_filename = new_filename
+                                            
+                                            selected_images.append({
+                                                'url': suggestion['url'],
+                                                'filename': final_filename,
+                                                'webkode': webkode
+                                            })
                         
                         with st.spinner("Pakker dine filer..."):
                             zip_data = create_download_zip(selected_images)
