@@ -479,22 +479,49 @@ def main_application():
                 for webkode, images in results['found'].items():
                     st.subheader(f"📋 {webkode} ({len(images)} billeder)")
                     
+                    # Detect duplicates within this webkode
+                    filename_counts = {}
+                    for image in images:
+                        filename = image['filename']
+                        filename_counts[filename] = filename_counts.get(filename, 0) + 1
+                    
                     # Display images in a more compact format
+                    filename_occurrence = {}
                     for idx, image in enumerate(images):
+                        filename = image['filename']
+                        
+                        # Track occurrence of this filename
+                        if filename not in filename_occurrence:
+                            filename_occurrence[filename] = 0
+                        filename_occurrence[filename] += 1
+                        
                         # Create truly unique key using global counter
                         global_image_counter += 1
                         image_key = f"img_{global_image_counter}_{webkode}_{image['filename']}"
                         
-                        # Simple checkbox without preview or size info
+                        # Add duplicate indicator if needed
+                        is_duplicate = filename_counts[filename] > 1
+                        if is_duplicate:
+                            duplicate_suffix = f" (kopi #{filename_occurrence[filename]})"
+                            display_name = f"🔄 {filename}{duplicate_suffix}"
+                        else:
+                            display_name = f"📷 {filename}"
+                        
+                        # Simple checkbox with duplicate highlighting
                         selected = st.checkbox(
-                            f"📷 {image['filename']}",
+                            display_name,
                             key=image_key,
-                            value=image_key in st.session_state.selected_images
+                            value=image_key in st.session_state.selected_images,
+                            help="Duplikat billede fundet" if is_duplicate else None
                         )
                         
                         if selected:
                             st.session_state.selected_images.add(image_key)
-                            all_images.append(image)
+                            # Add duplicate info to image for later processing
+                            image_with_duplicate_info = image.copy()
+                            image_with_duplicate_info['is_duplicate'] = is_duplicate
+                            image_with_duplicate_info['duplicate_number'] = filename_occurrence[filename] if is_duplicate else None
+                            all_images.append(image_with_duplicate_info)
                         elif image_key in st.session_state.selected_images:
                             st.session_state.selected_images.remove(image_key)
                 
@@ -605,12 +632,25 @@ def main_application():
                         counter = 0
                         
                         # Rebuild the mapping to find selected images from found results
+                        duplicate_counter = {}
                         for webkode, images in results['found'].items():
                             for image in images:
                                 counter += 1
                                 image_key = f"img_{counter}_{webkode}_{image['filename']}"
                                 if image_key in st.session_state.selected_images:
-                                    selected_images.append(image)
+                                    # Handle duplicate filenames
+                                    original_filename = image['filename']
+                                    if original_filename in duplicate_counter:
+                                        duplicate_counter[original_filename] += 1
+                                        final_filename = f"{original_filename}_kopi{duplicate_counter[original_filename]}"
+                                    else:
+                                        duplicate_counter[original_filename] = 0
+                                        final_filename = original_filename
+                                    
+                                    # Create image with final filename
+                                    final_image = image.copy()
+                                    final_image['filename'] = final_filename
+                                    selected_images.append(final_image)
                         
                         # Also include selected suggestions (with optional renaming)
                         if 'suggestions' in results:
@@ -651,9 +691,17 @@ def main_application():
                                         else:
                                             new_filename = f"{webkode}_{suggestion['filename']}_suggested"
                                         
+                                        # Handle duplicates for suggestions too
+                                        if new_filename in duplicate_counter:
+                                            duplicate_counter[new_filename] += 1
+                                            final_filename = f"{new_filename}_kopi{duplicate_counter[new_filename]}"
+                                        else:
+                                            duplicate_counter[new_filename] = 0
+                                            final_filename = new_filename
+                                        
                                         selected_images.append({
                                             'url': suggestion['url'],
-                                            'filename': new_filename,
+                                            'filename': final_filename,
                                             'webkode': webkode
                                         })
                         
