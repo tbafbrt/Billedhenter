@@ -537,15 +537,37 @@ def main_application():
                             
                             st.write(f"💡 **Fundet {len(suggestions)} alternativer:**")
                             
+                            # Detect duplicates within suggestions
+                            suggestion_filename_counts = {}
+                            for suggestion in suggestions:
+                                filename = suggestion['filename']
+                                suggestion_filename_counts[filename] = suggestion_filename_counts.get(filename, 0) + 1
+                            
                             # Display suggestions with selection option
+                            suggestion_filename_occurrence = {}
                             for idx, suggestion in enumerate(suggestions):
+                                filename = suggestion['filename']
+                                
+                                # Track occurrence of this filename
+                                if filename not in suggestion_filename_occurrence:
+                                    suggestion_filename_occurrence[filename] = 0
+                                suggestion_filename_occurrence[filename] += 1
+                                
                                 suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
                                 
+                                # Add duplicate indicator if needed
+                                is_duplicate = suggestion_filename_counts[filename] > 1
+                                if is_duplicate:
+                                    duplicate_suffix = f" (kopi #{suggestion_filename_occurrence[filename]})"
+                                    display_name = f"🔄 {suggestion['filename']}{duplicate_suffix} (fra {suggestion['webkode']})"
+                                else:
+                                    display_name = f"📷 {suggestion['filename']} (fra {suggestion['webkode']})"
+                                
                                 suggested = st.checkbox(
-                                    f"📷 {suggestion['filename']} (fra {suggestion['webkode']})",
+                                    display_name,
                                     key=suggestion_key,
                                     value=suggestion_key in st.session_state.selected_images,
-                                    help=suggestion['suggestion_reason']
+                                    help=f"{suggestion['suggestion_reason']} - Duplikat fundet" if is_duplicate else suggestion['suggestion_reason']
                                 )
                                 
                                 if suggested:
@@ -605,13 +627,58 @@ def main_application():
                         st.rerun()
                 
                 with col3:
-                    if st.button("💡 Fravælg forslag"):
-                        # Remove only suggestions from selection (keep exact matches)
+                    if st.button("🔄 Fravælg dubletter"):
+                        # Remove duplicates from selection (keep only copy #1 of each duplicate)
+                        keys_to_remove = set()
+                        
+                        # Check found images for duplicates
+                        for webkode, images in results['found'].items():
+                            filename_counts = {}
+                            for image in images:
+                                filename = image['filename']
+                                filename_counts[filename] = filename_counts.get(filename, 0) + 1
+                            
+                            # Find keys for duplicates (copy #2, #3, etc.)
+                            filename_occurrence = {}
+                            counter = 0
+                            for image in images:
+                                counter += 1
+                                filename = image['filename']
+                                
+                                if filename not in filename_occurrence:
+                                    filename_occurrence[filename] = 0
+                                filename_occurrence[filename] += 1
+                                
+                                # If this is a duplicate (copy #2 or higher), mark for removal
+                                if filename_counts[filename] > 1 and filename_occurrence[filename] > 1:
+                                    image_key = f"img_{counter}_{webkode}_{image['filename']}"
+                                    keys_to_remove.add(image_key)
+                        
+                        # Check suggestions for duplicates
                         if 'suggestions' in results:
                             for webkode, suggestions in results['suggestions'].items():
+                                suggestion_filename_counts = {}
+                                for suggestion in suggestions:
+                                    filename = suggestion['filename']
+                                    suggestion_filename_counts[filename] = suggestion_filename_counts.get(filename, 0) + 1
+                                
+                                # Find keys for suggestion duplicates
+                                suggestion_filename_occurrence = {}
                                 for idx, suggestion in enumerate(suggestions):
-                                    suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
-                                    st.session_state.selected_images.discard(suggestion_key)
+                                    filename = suggestion['filename']
+                                    
+                                    if filename not in suggestion_filename_occurrence:
+                                        suggestion_filename_occurrence[filename] = 0
+                                    suggestion_filename_occurrence[filename] += 1
+                                    
+                                    # If this is a duplicate (copy #2 or higher), mark for removal
+                                    if suggestion_filename_counts[filename] > 1 and suggestion_filename_occurrence[filename] > 1:
+                                        suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
+                                        keys_to_remove.add(suggestion_key)
+                        
+                        # Remove the duplicate keys
+                        for key in keys_to_remove:
+                            st.session_state.selected_images.discard(key)
                         
                         st.rerun()
                 
