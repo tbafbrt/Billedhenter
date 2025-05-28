@@ -502,19 +502,23 @@ def main_application():
                 all_images = []
                 global_image_counter = 0  # Add global counter for unique keys
                 
-                # First show all found images
-                for webkode, images in results['found'].items():
-                    st.subheader(f"📋 {webkode} ({len(images)} billeder)")
+                # First show all found images (sorted)
+                sorted_found_items = sorted(results['found'].items())
+                for webkode, images in sorted_found_items:
+                    # Sort images within each webkode
+                    sorted_images = sorted(images, key=lambda x: x['filename'])
+                    
+                    st.subheader(f"📋 {webkode} ({len(sorted_images)} billeder)")
                     
                     # Detect duplicates within this webkode
                     filename_counts = {}
-                    for image in images:
+                    for image in sorted_images:
                         filename = image['filename']
                         filename_counts[filename] = filename_counts.get(filename, 0) + 1
                     
                     # Display images in a more compact format
                     filename_occurrence = {}
-                    for idx, image in enumerate(images):
+                    for idx, image in enumerate(sorted_images):
                         filename = image['filename']
                         
                         # Track occurrence of this filename
@@ -552,37 +556,33 @@ def main_application():
                         elif image_key in st.session_state.selected_images:
                             st.session_state.selected_images.remove(image_key)
                 
-                # Then show missing codes with suggestions
+                # Then show missing codes with suggestions (sorted)
                 if results['missing']:
                     st.subheader("💡 Foreslåede alternativer for manglende billeder")
                     
-                    for webkode in results['missing']:
+                    # Sort missing webkodes
+                    sorted_missing = sorted(results['missing'])
+                    
+                    for webkode in sorted_missing:
                         if webkode in results.get('suggestions', {}):
                             # Show missing code with suggestions
                             st.write(f"🔍 **{webkode}** - Intet direkte match fundet")
                             suggestions = results['suggestions'][webkode]
                             
-                            st.write(f"💡 **Fundet {len(suggestions)} alternativer:**")
+                            # Sort suggestions by filename
+                            sorted_suggestions = sorted(suggestions, key=lambda x: x['filename'])
                             
-                            # Debug: Show what we're working with
-                            st.write(f"🔍 Debug: Tjekker {len(suggestions)} forslag for dubletter")
+                            st.write(f"💡 **Fundet {len(sorted_suggestions)} alternativer:**")
                             
                             # Detect duplicates within suggestions - collect all filenames first
-                            suggestion_filenames = [suggestion['filename'] for suggestion in suggestions]
+                            suggestion_filenames = [suggestion['filename'] for suggestion in sorted_suggestions]
                             suggestion_filename_counts = {}
                             for filename in suggestion_filenames:
                                 suggestion_filename_counts[filename] = suggestion_filename_counts.get(filename, 0) + 1
                             
-                            # Debug: Show duplicate counts
-                            duplicates_found = [filename for filename, count in suggestion_filename_counts.items() if count > 1]
-                            if duplicates_found:
-                                st.write(f"🔄 Debug: Fundet dubletter: {duplicates_found}")
-                            else:
-                                st.write("✅ Debug: Ingen dubletter fundet")
-                            
                             # Display suggestions with selection option
                             suggestion_filename_occurrence = {}
-                            for idx, suggestion in enumerate(suggestions):
+                            for idx, suggestion in enumerate(sorted_suggestions):
                                 filename = suggestion['filename']
                                 
                                 # Track occurrence of this filename
