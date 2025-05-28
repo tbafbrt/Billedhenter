@@ -72,6 +72,12 @@ class ICRTImageDownloader:
                 timeout=30
             )
             
+            # Check if token is expired (401 error)
+            if response.status_code == 401:
+                error_data = response.json() if response.headers.get('content-type') == 'application/json' else {}
+                if 'jwt expired' in str(error_data).lower() or 'expired' in str(error_data).lower():
+                    return False, {"error": "jwt_expired", "message": "JWT token has expired. Please re-authenticate."}
+            
             if response.status_code == 200:
                 return True, response.json()
             else:
@@ -79,6 +85,12 @@ class ICRTImageDownloader:
                 
         except requests.exceptions.RequestException as e:
             return False, {"error": f"Connection error: {str(e)}"}
+    
+    def refresh_authentication(self) -> bool:
+        """Try to refresh authentication using stored credentials"""
+        # Note: We can't automatically refresh without storing credentials
+        # This would require the user to re-enter their API credentials
+        return False
     
     def extract_project_code(self, webkode: str) -> str:
         """Extract project code from webkode"""
@@ -118,8 +130,23 @@ class ICRTImageDownloader:
         success, response = self.query_graphql_with_variables(query, variables)
         
         if not success:
-            st.error(f"Failed to query images: {response.get('error', 'Unknown error')}")
-            return results
+            # Check if JWT expired
+            if response.get('error') == 'jwt_expired':
+                st.error("🔑 Din session er udløbet. Du skal logge ind igen med dine API-oplysninger.")
+                
+                # Clear the API authentication state to force re-login
+                st.session_state.api_authenticated = False
+                st.session_state.jwt_token = None
+                
+                # Show re-authentication button
+                st.warning("Klik på knappen herunder for at gå tilbage til API login-siden.")
+                if st.button("🔄 Gå til API Login", type="primary"):
+                    st.rerun()
+                
+                return results
+            else:
+                st.error(f"Failed to query images: {response.get('error', 'Unknown error')}")
+                return results
         
         if 'errors' in response:
             st.error(f"GraphQL errors: {response['errors']}")
