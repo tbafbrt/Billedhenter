@@ -869,5 +869,5 @@ def main():
     # Main application
     main_application()
 
-if name == "main":
+if __name__ == "__main__":
     main()
