@@ -8,8 +8,6 @@ from PIL import Image
 from typing import List, Dict, Tuple, Optional
 import time
 import base64
-from streamlit_extras.customize_running import center_running
-
 # Configure Streamlit page
 st.set_page_config(
     page_title="TA Billedhenter",
