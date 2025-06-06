@@ -8,6 +8,8 @@ from PIL import Image
 from typing import List, Dict, Tuple, Optional
 import time
 import base64
+from datetime import datetime
+from streamlit_extras.customize_running import center_running
 
 # Configure Streamlit page
 st.set_page_config(
@@ -27,6 +29,8 @@ if 'search_results' not in st.session_state:
     st.session_state.search_results = {}
 if 'selected_images' not in st.session_state:
     st.session_state.selected_images = set()
+if 'available_dates' not in st.session_state:
+    st.session_state.available_dates = []
 
 class ICRTImageDownloader:
     def __init__(self):
@@ -98,8 +102,63 @@ class ICRTImageDownloader:
         match = re.match(r'^([A-Z]{2}\d{5}|\d{5})', webkode)
         return match.group(1) if match else ""
     
-    def search_images_for_codes(self, project_code: str, webkodes: List[str]) -> Dict:
-        """Search for images matching the webkodes using the proven filtering approach"""
+    def fetch_available_dates(self, project_code: str) -> List[str]:
+        """Fetch available modification dates from the project"""
+        # GraphQL query to fetch media with modified dates
+        query = """
+        query GetProjectMediaDates($icrtcode: String!) {
+            project(icrtcode: $icrtcode) {
+                name
+                media {
+                    filename
+                    modified
+                }
+            }
+        }
+        """
+        
+        variables = {
+            'icrtcode': project_code
+        }
+        
+        # Execute query
+        success, response = self.query_graphql_with_variables(query, variables)
+        
+        if not success:
+            st.error(f"Failed to fetch dates: {response.get('error', 'Unknown error')}")
+            return []
+        
+        if 'errors' in response:
+            st.error(f"GraphQL errors: {response['errors']}")
+            return []
+        
+        # Extract media data
+        project_data = response.get('data', {}).get('project', {})
+        if not project_data:
+            return []
+        
+        media_files = project_data.get('media', [])
+        
+        # Extract unique year-month combinations
+        date_set = set()
+        for media in media_files:
+            modified_date = media.get('modified')
+            if modified_date:
+                try:
+                    # Parse the ISO date string: "2020-12-03T20:37:06.581Z"
+                    dt = datetime.fromisoformat(modified_date.replace('Z', '+00:00'))
+                    year_month = dt.strftime('%Y-%m')
+                    date_set.add(year_month)
+                except Exception as e:
+                    # Skip invalid dates
+                    continue
+        
+        # Sort dates in descending order (newest first)
+        sorted_dates = sorted(list(date_set), reverse=True)
+        return sorted_dates
+    
+    def search_images_for_codes(self, project_code: str, webkodes: List[str], selected_date_filters: List[str] = None) -> Dict:
+        """Search for images matching the webkodes with optional date filtering"""
         results = {
             'found': {},
             'missing': [],
@@ -109,7 +168,7 @@ class ICRTImageDownloader:
         # Create a set of webkodes for faster lookup (convert to lowercase)
         webkode_set = {code.strip().lower() for code in webkodes}
         
-        # Build GraphQL query using variables
+        # Build GraphQL query using variables - now including modified date
         query = """
         query GetProjectMedia($icrtcode: String!) {
             project(icrtcode: $icrtcode) {
@@ -117,6 +176,7 @@ class ICRTImageDownloader:
                 media {
                     filename
                     image
+                    modified
                 }
             }
         }
@@ -159,7 +219,31 @@ class ICRTImageDownloader:
             return results
         
         media_files = project_data.get('media', [])
+        
+        # Filter by date if date filters are selected
+        if selected_date_filters:
+            filtered_media = []
+            for media in media_files:
+                modified_date = media.get('modified')
+                if modified_date:
+                    try:
+                        dt = datetime.fromisoformat(modified_date.replace('Z', '+00:00'))
+                        year_month = dt.strftime('%Y-%m')
+                        if year_month in selected_date_filters:
+                            filtered_media.append(media)
+                    except:
+                        # Skip files with invalid dates
+                        continue
+                else:
+                    # Include files without modification dates if you want to be inclusive
+                    # Comment out this line if you want to exclude files without dates
+                    filtered_media.append(media)
+            
+            media_files = filtered_media
+        
         st.write(f"📊 Samlet antal billeder fundet {len(media_files)} ")
+        if selected_date_filters:
+            st.write(f"🗓️ Filtreret efter måneder: {', '.join(selected_date_filters)}")
         
         # Use the proven extract_product_code function
         def extract_product_code(filename):
@@ -183,6 +267,7 @@ class ICRTImageDownloader:
             
             filename = media.get('filename', '')
             image_url = media.get('image', '')
+            modified_date = media.get('modified', '')
             
             if filename and image_url:
                 # Extract product code
@@ -206,7 +291,8 @@ class ICRTImageDownloader:
                         results['found'][original_webkode].append({
                             'url': image_url,
                             'filename': filename,
-                            'webkode': original_webkode
+                            'webkode': original_webkode,
+                            'modified': modified_date
                         })
         
         # Clean up progress indicators
@@ -250,6 +336,7 @@ class ICRTImageDownloader:
                                                 'filename': filename,
                                                 'webkode': product_code,
                                                 'original_webkode': clean_webkode,
+                                                'modified': media.get('modified', ''),
                                                 'suggestion_reason': f"Alternative variant ({product_code}) found for missing variant ({clean_webkode})"
                                             })
                         
@@ -432,6 +519,19 @@ def create_download_zip(selected_images: List[Dict]) -> bytes:
     
     return zip_buffer.getvalue()
 
+def format_date_for_display(date_str: str) -> str:
+    """Convert YYYY-MM format to a more readable format"""
+    try:
+        year, month = date_str.split('-')
+        month_names = {
+            '01': 'Januar', '02': 'Februar', '03': 'Marts', '04': 'April',
+            '05': 'Maj', '06': 'Juni', '07': 'Juli', '08': 'August',
+            '09': 'September', '10': 'Oktober', '11': 'November', '12': 'December'
+        }
+        return f"{month_names.get(month, month)} {year}"
+    except:
+        return date_str
+
 def main_application():
     """Main application interface"""
     st.title("🚚 TA Billedhenter")
@@ -470,13 +570,46 @@ def main_application():
             help="Format: LLDDDDD (e.g., IC20006) or DDDDD"
         )
         
+        # Fetch available dates when project code is available
+        if project_code_input and st.button("🗓️ Hent tilgængelige datoer", help="Klik for at se hvilke måneder der er billeder fra"):
+            with st.spinner("Henter tilgængelige datoer..."):
+                available_dates = downloader.fetch_available_dates(project_code_input)
+                st.session_state.available_dates = available_dates
+                if available_dates:
+                    st.success(f"Fundet billeder fra {len(available_dates)} forskellige måneder")
+                else:
+                    st.warning("Ingen datoer fundet eller fejl ved hentning")
+        
+        # Date filtering section
+        if st.session_state.available_dates:
+            st.header("🗓️ Vælg måneder (valgfrit)")
+            st.markdown("Vælg specifikke måneder hvis du kun vil have billeder fra bestemte perioder. Lad feltet tomt for at få alle billeder.")
+            
+            # Create options for multiselect
+            date_options = []
+            for date in st.session_state.available_dates:
+                display_name = format_date_for_display(date)
+                date_options.append({"value": date, "display": f"{display_name} ({date})"})
+            
+            selected_date_filters = st.multiselect(
+                "Vælg måneder:",
+                options=[opt["value"] for opt in date_options],
+                format_func=lambda x: next(opt["display"] for opt in date_options if opt["value"] == x),
+                help="Du kan vælge flere måneder. Lad feltet tomt for at inkludere alle billeder."
+            )
+            
+            if selected_date_filters:
+                st.info(f"Filtrerer efter {len(selected_date_filters)} måned(er): {', '.join([format_date_for_display(d) for d in selected_date_filters])}")
+        else:
+            selected_date_filters = None
+        
         if st.button("🔍 Find billedfiler", type="primary"):
             if not project_code_input:
                 st.error("Projectkode ikke fundet, prøv igen")
                 return
             
             with st.spinner("Søger efter filer..."):
-                results = downloader.search_images_for_codes(project_code_input, webkodes)
+                results = downloader.search_images_for_codes(project_code_input, webkodes, selected_date_filters)
                 st.session_state.search_results = results
         
         # Display search results
@@ -520,6 +653,7 @@ def main_application():
                     filename_occurrence = {}
                     for idx, image in enumerate(sorted_images):
                         filename = image['filename']
+                        modified_date = image.get('modified', '')
                         
                         # Track occurrence of this filename
                         if filename not in filename_occurrence:
@@ -537,6 +671,15 @@ def main_application():
                             display_name = f"🔄 {filename}{duplicate_suffix}"
                         else:
                             display_name = f"📷 {filename}"
+                        
+                        # Add date info if available
+                        if modified_date:
+                            try:
+                                dt = datetime.fromisoformat(modified_date.replace('Z', '+00:00'))
+                                date_str = dt.strftime('%Y-%m-%d')
+                                display_name += f" (ændret: {date_str})"
+                            except:
+                                pass
                         
                         # Simple checkbox with duplicate highlighting
                         selected = st.checkbox(
@@ -584,6 +727,7 @@ def main_application():
                             suggestion_filename_occurrence = {}
                             for idx, suggestion in enumerate(sorted_suggestions):
                                 filename = suggestion['filename']
+                                modified_date = suggestion.get('modified', '')
                                 
                                 # Track occurrence of this filename
                                 if filename not in suggestion_filename_occurrence:
@@ -603,6 +747,15 @@ def main_application():
                                 else:
                                     display_name = f"📷 {suggestion['filename']} (fra {suggestion['webkode']})"
                                     help_text = suggestion['suggestion_reason']
+                                
+                                # Add date info if available
+                                if modified_date:
+                                    try:
+                                        dt = datetime.fromisoformat(modified_date.replace('Z', '+00:00'))
+                                        date_str = dt.strftime('%Y-%m-%d')
+                                        display_name += f" (ændret: {date_str})"
+                                    except:
+                                        pass
                                 
                                 suggested = st.checkbox(
                                     display_name,
