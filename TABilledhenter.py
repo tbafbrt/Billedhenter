@@ -27,6 +27,8 @@ if 'search_results' not in st.session_state:
     st.session_state.search_results = {}
 if 'selected_images' not in st.session_state:
     st.session_state.selected_images = set()
+if 'image_keys_registry' not in st.session_state:
+    st.session_state.image_keys_registry = {}
 
 class ICRTImageDownloader:
     def __init__(self):
@@ -478,6 +480,8 @@ def main_application():
             with st.spinner("Søger efter filer..."):
                 results = downloader.search_images_for_codes(project_code_input, webkodes)
                 st.session_state.search_results = results
+                # Clear the keys registry when new search is performed
+                st.session_state.image_keys_registry = {}
         
         # Display search results
         if st.session_state.search_results:
@@ -502,13 +506,15 @@ def main_application():
                 all_images = []
                 global_image_counter = 0  # Add global counter for unique keys
                 
-                # First show all found images (sorted)
+                # Build a registry of all keys and their corresponding images
+                # This ensures consistency between display and batch selection
+                keys_registry = {}
+                
+                # First pass: register all found images
                 sorted_found_items = sorted(results['found'].items())
                 for webkode, images in sorted_found_items:
                     # Sort images within each webkode
                     sorted_images = sorted(images, key=lambda x: x['filename'])
-                    
-                    st.subheader(f"📋 {webkode} ({len(sorted_images)} billeder)")
                     
                     # Detect duplicates within this webkode
                     filename_counts = {}
@@ -516,7 +522,7 @@ def main_application():
                         filename = image['filename']
                         filename_counts[filename] = filename_counts.get(filename, 0) + 1
                     
-                    # Display images in a more compact format
+                    # Register images with consistent keys
                     filename_occurrence = {}
                     for idx, image in enumerate(sorted_images):
                         filename = image['filename']
@@ -530,57 +536,32 @@ def main_application():
                         global_image_counter += 1
                         image_key = f"img_{global_image_counter}_{webkode}_{image['filename']}"
                         
-                        # Add duplicate indicator if needed
-                        is_duplicate = filename_counts[filename] > 1
-                        if is_duplicate:
-                            duplicate_suffix = f" (kopi #{filename_occurrence[filename]})"
-                            display_name = f"🔄 {filename}{duplicate_suffix}"
-                        else:
-                            display_name = f"📷 {filename}"
-                        
-                        # Simple checkbox with duplicate highlighting
-                        selected = st.checkbox(
-                            display_name,
-                            key=image_key,
-                            value=image_key in st.session_state.selected_images,
-                            help="Duplikat billede fundet" if is_duplicate else None
-                        )
-                        
-                        if selected:
-                            st.session_state.selected_images.add(image_key)
-                            # Add duplicate info to image for later processing
-                            image_with_duplicate_info = image.copy()
-                            image_with_duplicate_info['is_duplicate'] = is_duplicate
-                            image_with_duplicate_info['duplicate_number'] = filename_occurrence[filename] if is_duplicate else None
-                            all_images.append(image_with_duplicate_info)
-                        elif image_key in st.session_state.selected_images:
-                            st.session_state.selected_images.remove(image_key)
+                        # Store in registry
+                        keys_registry[image_key] = {
+                            'type': 'found',
+                            'webkode': webkode,
+                            'image': image,
+                            'is_duplicate': filename_counts[filename] > 1,
+                            'duplicate_number': filename_occurrence[filename] if filename_counts[filename] > 1 else None
+                        }
                 
-                # Then show missing codes with suggestions (sorted)
+                # Second pass: register all suggestions
                 if results['missing']:
-                    st.subheader("💡 Foreslåede alternativer for manglende billeder")
-                    
-                    # Sort missing webkodes
                     sorted_missing = sorted(results['missing'])
                     
                     for webkode in sorted_missing:
                         if webkode in results.get('suggestions', {}):
-                            # Show missing code with suggestions
-                            st.write(f"🔍 **{webkode}** - Intet direkte match fundet")
                             suggestions = results['suggestions'][webkode]
-                            
                             # Sort suggestions by filename
                             sorted_suggestions = sorted(suggestions, key=lambda x: x['filename'])
                             
-                            st.write(f"💡 **Fundet {len(sorted_suggestions)} alternativer:**")
-                            
-                            # Detect duplicates within suggestions - collect all filenames first
+                            # Detect duplicates within suggestions
                             suggestion_filenames = [suggestion['filename'] for suggestion in sorted_suggestions]
                             suggestion_filename_counts = {}
                             for filename in suggestion_filenames:
                                 suggestion_filename_counts[filename] = suggestion_filename_counts.get(filename, 0) + 1
                             
-                            # Display suggestions with selection option
+                            # Register suggestions with consistent keys
                             suggestion_filename_occurrence = {}
                             for idx, suggestion in enumerate(sorted_suggestions):
                                 filename = suggestion['filename']
@@ -592,29 +573,98 @@ def main_application():
                                 
                                 suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
                                 
-                                # Add duplicate indicator if needed
-                                is_duplicate = suggestion_filename_counts[filename] > 1
-                                occurrence_number = suggestion_filename_occurrence[filename]
+                                # Store in registry
+                                keys_registry[suggestion_key] = {
+                                    'type': 'suggestion',
+                                    'webkode': webkode,
+                                    'image': suggestion,
+                                    'is_duplicate': suggestion_filename_counts[filename] > 1,
+                                    'duplicate_number': suggestion_filename_occurrence[filename] if suggestion_filename_counts[filename] > 1 else None
+                                }
+                
+                # Store registry in session state
+                st.session_state.image_keys_registry = keys_registry
+                
+                # Now display the images using the registry
+                for webkode, images in sorted_found_items:
+                    sorted_images = sorted(images, key=lambda x: x['filename'])
+                    
+                    st.subheader(f"📋 {webkode} ({len(sorted_images)} billeder)")
+                    
+                    # Find keys for this webkode from registry
+                    webkode_keys = [key for key, data in keys_registry.items() 
+                                   if data['type'] == 'found' and data['webkode'] == webkode]
+                    
+                    for key in webkode_keys:
+                        data = keys_registry[key]
+                        image = data['image']
+                        is_duplicate = data['is_duplicate']
+                        duplicate_number = data['duplicate_number']
+                        
+                        # Create display name
+                        if is_duplicate:
+                            duplicate_suffix = f" (kopi #{duplicate_number})"
+                            display_name = f"🔄 {image['filename']}{duplicate_suffix}"
+                        else:
+                            display_name = f"📷 {image['filename']}"
+                        
+                        # Display checkbox
+                        selected = st.checkbox(
+                            display_name,
+                            key=key,
+                            value=key in st.session_state.selected_images,
+                            help="Duplikat billede fundet" if is_duplicate else None
+                        )
+                        
+                        # Update selection state
+                        if selected:
+                            st.session_state.selected_images.add(key)
+                        elif key in st.session_state.selected_images:
+                            st.session_state.selected_images.remove(key)
+                
+                # Display missing codes with suggestions
+                if results['missing']:
+                    st.subheader("💡 Foreslåede alternativer for manglende billeder")
+                    
+                    for webkode in sorted_missing:
+                        if webkode in results.get('suggestions', {}):
+                            # Show missing code with suggestions
+                            st.write(f"🔍 **{webkode}** - Intet direkte match fundet")
+                            suggestions = results['suggestions'][webkode]
+                            st.write(f"💡 **Fundet {len(suggestions)} alternativer:**")
+                            
+                            # Find keys for this webkode's suggestions from registry
+                            suggestion_keys = [key for key, data in keys_registry.items() 
+                                             if data['type'] == 'suggestion' and data['webkode'] == webkode]
+                            
+                            for key in suggestion_keys:
+                                data = keys_registry[key]
+                                suggestion = data['image']
+                                is_duplicate = data['is_duplicate']
+                                duplicate_number = data['duplicate_number']
                                 
+                                # Create display name
                                 if is_duplicate:
-                                    duplicate_suffix = f" (kopi #{occurrence_number})"
+                                    duplicate_suffix = f" (kopi #{duplicate_number})"
                                     display_name = f"🔄 {suggestion['filename']}{duplicate_suffix} (fra {suggestion['webkode']})"
-                                    help_text = f"{suggestion['suggestion_reason']} - Duplikat #{occurrence_number} af {suggestion_filename_counts[filename]}"
+                                    help_text = f"{suggestion['suggestion_reason']} - Duplikat #{duplicate_number}"
                                 else:
                                     display_name = f"📷 {suggestion['filename']} (fra {suggestion['webkode']})"
                                     help_text = suggestion['suggestion_reason']
                                 
+                                # Display checkbox
                                 suggested = st.checkbox(
                                     display_name,
-                                    key=suggestion_key,
-                                    value=suggestion_key in st.session_state.selected_images,
+                                    key=key,
+                                    value=key in st.session_state.selected_images,
                                     help=help_text
                                 )
                                 
+                                # Update selection state
                                 if suggested:
-                                    st.session_state.selected_images.add(suggestion_key)
-                                elif suggestion_key in st.session_state.selected_images:
-                                    st.session_state.selected_images.remove(suggestion_key)
+                                    st.session_state.selected_images.add(key)
+                                elif key in st.session_state.selected_images:
+                                    st.session_state.selected_images.remove(key)
                         else:
                             # No suggestions available
                             st.write(f"• **{webkode}** - Ingen alternativer fundet")
@@ -626,44 +676,30 @@ def main_application():
                     help="Eksempel: AB23456-0023-00_01 → AB23456-0023-50_01 hvis du søgte efter AB23456-0023-50"
                 )
                 
-                # Batch selection controls - placed after all images and suggestions
+                # Batch selection controls - now using the registry for consistency
                 st.subheader("🎛️ Vælg flere ad gangen")
                 col1, col2, col3, col4 = st.columns(4)
                 
                 with col1:
                     if st.button("✅ Vælg alle inkl. forslag"):
-                        # Clear existing selections and select all (matches + suggestions)
+                        # Clear existing selections and select all using registry keys
                         st.session_state.selected_images.clear()
-                        counter = 0
                         
-                        # Select all found images
-                        for webkode, images in results['found'].items():
-                            for image in images:
-                                counter += 1
-                                image_key = f"img_{counter}_{webkode}_{image['filename']}"
-                                st.session_state.selected_images.add(image_key)
-                        
-                        # Select all suggestions
-                        if 'suggestions' in results:
-                            for webkode, suggestions in results['suggestions'].items():
-                                for idx, suggestion in enumerate(suggestions):
-                                    suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
-                                    st.session_state.selected_images.add(suggestion_key)
+                        # Select all keys from registry
+                        for key in keys_registry.keys():
+                            st.session_state.selected_images.add(key)
                         
                         st.rerun()
                 
                 with col2:
                     if st.button("🎯 Vælg kun hele matches"):
-                        # Clear existing selections and select only exact matches
+                        # Clear existing selections and select only exact matches using registry
                         st.session_state.selected_images.clear()
-                        counter = 0
                         
                         # Select only found images (no suggestions)
-                        for webkode, images in results['found'].items():
-                            for image in images:
-                                counter += 1
-                                image_key = f"img_{counter}_{webkode}_{image['filename']}"
-                                st.session_state.selected_images.add(image_key)
+                        for key, data in keys_registry.items():
+                            if data['type'] == 'found':
+                                st.session_state.selected_images.add(key)
                         
                         st.rerun()
                 
@@ -672,50 +708,10 @@ def main_application():
                         # Remove duplicates from selection (keep only copy #1 of each duplicate)
                         keys_to_remove = set()
                         
-                        # Check found images for duplicates
-                        for webkode, images in results['found'].items():
-                            filename_counts = {}
-                            for image in images:
-                                filename = image['filename']
-                                filename_counts[filename] = filename_counts.get(filename, 0) + 1
-                            
-                            # Find keys for duplicates (copy #2, #3, etc.)
-                            filename_occurrence = {}
-                            counter = 0
-                            for image in images:
-                                counter += 1
-                                filename = image['filename']
-                                
-                                if filename not in filename_occurrence:
-                                    filename_occurrence[filename] = 0
-                                filename_occurrence[filename] += 1
-                                
-                                # If this is a duplicate (copy #2 or higher), mark for removal
-                                if filename_counts[filename] > 1 and filename_occurrence[filename] > 1:
-                                    image_key = f"img_{counter}_{webkode}_{image['filename']}"
-                                    keys_to_remove.add(image_key)
-                        
-                        # Check suggestions for duplicates
-                        if 'suggestions' in results:
-                            for webkode, suggestions in results['suggestions'].items():
-                                suggestion_filename_counts = {}
-                                for suggestion in suggestions:
-                                    filename = suggestion['filename']
-                                    suggestion_filename_counts[filename] = suggestion_filename_counts.get(filename, 0) + 1
-                                
-                                # Find keys for suggestion duplicates
-                                suggestion_filename_occurrence = {}
-                                for idx, suggestion in enumerate(suggestions):
-                                    filename = suggestion['filename']
-                                    
-                                    if filename not in suggestion_filename_occurrence:
-                                        suggestion_filename_occurrence[filename] = 0
-                                    suggestion_filename_occurrence[filename] += 1
-                                    
-                                    # If this is a duplicate (copy #2 or higher), mark for removal
-                                    if suggestion_filename_counts[filename] > 1 and suggestion_filename_occurrence[filename] > 1:
-                                        suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
-                                        keys_to_remove.add(suggestion_key)
+                        # Check registry for duplicates
+                        for key, data in keys_registry.items():
+                            if data['is_duplicate'] and data['duplicate_number'] > 1:
+                                keys_to_remove.add(key)
                         
                         # Remove the duplicate keys
                         for key in keys_to_remove:
@@ -737,16 +733,18 @@ def main_application():
                     
                     if st.button("📦 Pak og download ZIP fil", type="primary"):
                         selected_images = []
-                        counter = 0
                         
-                        # Rebuild the mapping to find selected images from found results
+                        # Use the registry to build selected images list
                         duplicate_counter = {}
-                        for webkode, images in results['found'].items():
-                            for image in images:
-                                counter += 1
-                                image_key = f"img_{counter}_{webkode}_{image['filename']}"
-                                if image_key in st.session_state.selected_images:
-                                    # Handle duplicate filenames
+                        
+                        for key in st.session_state.selected_images:
+                            if key in keys_registry:
+                                data = keys_registry[key]
+                                image = data['image']
+                                webkode = data['webkode']
+                                
+                                if data['type'] == 'found':
+                                    # Handle duplicate filenames for found images
                                     original_filename = image['filename']
                                     if original_filename in duplicate_counter:
                                         duplicate_counter[original_filename] += 1
@@ -759,59 +757,54 @@ def main_application():
                                     final_image = image.copy()
                                     final_image['filename'] = final_filename
                                     selected_images.append(final_image)
-                        
-                        # Also include selected suggestions (with optional renaming)
-                        if 'suggestions' in results:
-                            for webkode, suggestions in results['suggestions'].items():
-                                for idx, suggestion in enumerate(suggestions):
-                                    suggestion_key = f"suggestion_{webkode}_{idx}_{suggestion['filename']}"
-                                    if suggestion_key in st.session_state.selected_images:
-                                        # Determine filename
-                                        if rename_alternatives:
-                                            # Extract the original variant from the searched webkode
-                                            if '-' in webkode:
-                                                parts = webkode.split('-')
-                                                if len(parts) >= 3:
-                                                    desired_variant = parts[-1]  # e.g., "50"
+                                
+                                elif data['type'] == 'suggestion':
+                                    # Handle suggestions with optional renaming
+                                    if rename_alternatives:
+                                        # Extract the original variant from the searched webkode
+                                        if '-' in webkode:
+                                            parts = webkode.split('-')
+                                            if len(parts) >= 3:
+                                                desired_variant = parts[-1]  # e.g., "50"
+                                                
+                                                # Replace the variant in the filename
+                                                original_filename = image['filename']
+                                                if '_' in original_filename:
+                                                    base_part = original_filename.split('_')[0]  # e.g., "AB23456-0023-00"
+                                                    suffix_part = original_filename.split('_')[1]  # e.g., "01"
                                                     
-                                                    # Replace the variant in the filename
-                                                    original_filename = suggestion['filename']
-                                                    if '_' in original_filename:
-                                                        base_part = original_filename.split('_')[0]  # e.g., "AB23456-0023-00"
-                                                        suffix_part = original_filename.split('_')[1]  # e.g., "01"
-                                                        
-                                                        # Replace the last variant part
-                                                        if '-' in base_part:
-                                                            base_parts = base_part.split('-')
-                                                            if len(base_parts) >= 3:
-                                                                base_parts[-1] = desired_variant  # Replace "00" with "50"
-                                                                new_filename = '-'.join(base_parts) + '_' + suffix_part
-                                                            else:
-                                                                new_filename = f"{webkode}_{original_filename}_renamed"
+                                                    # Replace the last variant part
+                                                    if '-' in base_part:
+                                                        base_parts = base_part.split('-')
+                                                        if len(base_parts) >= 3:
+                                                            base_parts[-1] = desired_variant  # Replace "00" with "50"
+                                                            new_filename = '-'.join(base_parts) + '_' + suffix_part
                                                         else:
                                                             new_filename = f"{webkode}_{original_filename}_renamed"
                                                     else:
                                                         new_filename = f"{webkode}_{original_filename}_renamed"
                                                 else:
-                                                    new_filename = f"{webkode}_{suggestion['filename']}_suggested"
+                                                    new_filename = f"{webkode}_{original_filename}_renamed"
                                             else:
-                                                new_filename = f"{webkode}_{suggestion['filename']}_suggested"
+                                                new_filename = f"{webkode}_{image['filename']}_suggested"
                                         else:
-                                            new_filename = f"{webkode}_{suggestion['filename']}_suggested"
-                                        
-                                        # Handle duplicates for suggestions too
-                                        if new_filename in duplicate_counter:
-                                            duplicate_counter[new_filename] += 1
-                                            final_filename = f"{new_filename}_kopi{duplicate_counter[new_filename]}"
-                                        else:
-                                            duplicate_counter[new_filename] = 0
-                                            final_filename = new_filename
-                                        
-                                        selected_images.append({
-                                            'url': suggestion['url'],
-                                            'filename': final_filename,
-                                            'webkode': webkode
-                                        })
+                                            new_filename = f"{webkode}_{image['filename']}_suggested"
+                                    else:
+                                        new_filename = f"{webkode}_{image['filename']}_suggested"
+                                    
+                                    # Handle duplicates for suggestions too
+                                    if new_filename in duplicate_counter:
+                                        duplicate_counter[new_filename] += 1
+                                        final_filename = f"{new_filename}_kopi{duplicate_counter[new_filename]}"
+                                    else:
+                                        duplicate_counter[new_filename] = 0
+                                        final_filename = new_filename
+                                    
+                                    selected_images.append({
+                                        'url': image['url'],
+                                        'filename': final_filename,
+                                        'webkode': webkode
+                                    })
                         
                         with st.spinner("Pakker dine filer..."):
                             zip_data = create_download_zip(selected_images)
