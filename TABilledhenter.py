@@ -731,7 +731,38 @@ def main_application():
                 if selected_count > 0:
                     st.header(f"⬇️ Hent valgte billeder ({selected_count})")
                     
-                    if st.button("📦 Pak og download ZIP fil", type="primary"):
+                    # Check if too many images are selected
+                    MAX_IMAGES_PER_ZIP = 300
+                    
+                    if selected_count > MAX_IMAGES_PER_ZIP:
+                        st.error(f"⚠️ **For mange billeder valgt!**")
+                        st.warning(f"Du har valgt **{selected_count} billeder**, men maksimum er **{MAX_IMAGES_PER_ZIP} billeder** per download.")
+                        st.info(f"💡 **Løsninger:**")
+                        st.markdown(f"""
+                        - **Fravælg nogle billeder** og prøv igen
+                        - **Brug 'Fravælg dubletter'** knappen for at reducere antallet
+                        - **Download i mindre portioner** - vælg færre billeder ad gangen
+                        """)
+                        
+                        # Show how many to remove
+                        excess_count = selected_count - MAX_IMAGES_PER_ZIP
+                        st.markdown(f"🎯 **Du skal fravælge {excess_count} billeder for at fortsætte**")
+                        
+                    else:
+                        # Safe to proceed with download
+                        if selected_count <= 100:
+                            zip_size_estimate = "lille"
+                            zip_color = "🟢"
+                        elif selected_count <= 200:
+                            zip_size_estimate = "medium"
+                            zip_color = "🟡"
+                        else:
+                            zip_size_estimate = "stor"
+                            zip_color = "🟠"
+                        
+                        st.info(f"{zip_color} **ZIP størrelse**: {zip_size_estimate} (~{selected_count * 0.2:.1f}MB estimeret)")
+                    
+                    if selected_count <= MAX_IMAGES_PER_ZIP and st.button("📦 Pak og download ZIP fil", type="primary"):
                         selected_images = []
                         
                         # Use the registry to build selected images list
