@@ -97,7 +97,7 @@ class ICRTImageDownloader:
     def extract_project_code(self, webkode: str) -> str:
         """Extract project code from webkode"""
         # Pattern: LLDDDDD-DDDD-DD or DDDDD-DDDD-DD
-        match = re.match(r'^([A-Z]{2}\d{5}|\d{5})', webkode)
+        match = re.match(r'^([a-z]{1,3})(\d+[-]\d+[-]\d+.*)$', code)
         return match.group(1) if match else ""
     
     def search_images_for_codes(self, project_code: str, webkodes: List[str]) -> Dict:
