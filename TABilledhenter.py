@@ -82,8 +82,7 @@ class ICRTImageDownloader:
             # Check if token is expired (401 error)
             if response.status_code == 401:
                 error_data = response.json() if response.headers.get('content-type') == 'application/json' else {}
-                if 'jwt expired' in str(error_data).lower() or 'expired' in str(error_data).lower():
-                    return False, {"error": "jwt_expired", "message": "JWT token has expired. Please re-authenticate."}
+                return False, {"error": "jwt_expired", "message": "JWT token has expired. Please re-authenticate."}
             
             if response.status_code == 200:
                 return True, response.json()
@@ -163,7 +162,10 @@ class ICRTImageDownloader:
         
         if not success:
             # Check if JWT expired
-            if response.get('error') == 'jwt_expired':
+            if (response.get('error') == 'jwt_expired' or 
+                '401' in str(response.get('error', '')) or 
+                'jwt expired' in str(response.get('error', '')).lower()):
+                
                 st.error("🔑 Din session er udløbet. Du skal logge ind igen med dine API-oplysninger.")
                 
                 # Clear the API authentication state to force re-login
@@ -172,7 +174,7 @@ class ICRTImageDownloader:
                 
                 # Show re-authentication button
                 st.warning("Klik på knappen herunder for at gå tilbage til API login-siden.")
-                if st.button("🔄 Gå til API Login", type="primary"):
+                if st.button("🔄 Gå til API Login", type="primary", key="reauth_button"):
                     st.rerun()
                 
                 return results
@@ -208,6 +210,22 @@ class ICRTImageDownloader:
         status_text = st.empty()
         found_count = 0
         
+        # Debug: Look for our target files specifically
+        target_files_found = []
+        target_patterns = ['23022-0259', '23022-0263']  # Add your specific test patterns
+        
+        for media in media_files[:100]:  # Check first 100 files
+            filename = media.get('filename', '')
+            if any(pattern in filename.lower() for pattern in target_patterns):
+                target_files_found.append(filename)
+        
+        if target_files_found:
+            st.write(f"🎯 Found {len(target_files_found)} target files in first 100:")
+            for f in target_files_found:
+                st.write(f"  - {f}")
+        else:
+            st.write("❌ No target files found in first 100 files")
+        
         for i, media in enumerate(media_files):
             if i % 50 == 0:  # Update progress every 50 files
                 status_text.text(f"Processing images... {i+1}/{len(media_files)}")
@@ -220,12 +238,23 @@ class ICRTImageDownloader:
                 # Extract product code
                 product_code = extract_product_code(filename)
                 
+                # Debug: Show processing of target files
+                if any(pattern in filename.lower() for pattern in target_patterns):
+                    st.write(f"🔍 Target file processing:")
+                    st.write(f"  Filename: '{filename}'")
+                    st.write(f"  Extracted product code: '{product_code}'")
+                    st.write(f"  In webkode_set? {product_code in webkode_set}")
+                    st.write(f"  Webkode_set contains: {list(webkode_set)}")
+                
                 # Check for match
                 if product_code in webkode_set:
                     found_count += 1
                     
                     # Find original webkode using mapping
                     original_webkode = original_mapping.get(product_code, product_code)
+                    
+                    # Debug: Show successful match
+                    st.write(f"✅ MATCH FOUND: '{filename}' → '{original_webkode}'")
                     
                     if original_webkode not in results['found']:
                         results['found'][original_webkode] = []
@@ -537,7 +566,9 @@ def main_application():
                 st.success(f"✅ Fundet {len(webkodes)} webkoder i Excel-fil")
                 # Extract project code from first webkode
                 if webkodes:
-                    project_code = downloader.extract_project_code(webkodes[0])
+                    # Use original webkode (before any letter stripping) to extract project code
+                    first_webkode = webkodes[0]
+                    project_code = downloader.extract_project_code(first_webkode)
     
     with tab2:
         st.markdown("Indsæt webkoder direkte fra clipboard")
@@ -564,7 +595,9 @@ def main_application():
                 
                 # Extract project code from first webkode
                 if webkodes:
-                    project_code = downloader.extract_project_code(webkodes[0])
+                    # Use original webkode (before any letter stripping) to extract project code
+                    first_webkode = webkodes[0]
+                    project_code = downloader.extract_project_code(first_webkode)
     
     # Continue with the rest of the processing if webkodes were found
     if webkodes:
@@ -580,6 +613,34 @@ def main_application():
             if not project_code_input:
                 st.error("Projectkode ikke fundet, prøv igen")
                 return
+            
+            # Show debug BEFORE calling the search function
+            st.header("🔍 Debug: Webkoder der bruges til søgning")
+            
+            # Process webkodes here to show debug info
+            processed_codes, original_mapping = downloader.process_webkodes(webkodes)
+            webkode_set = {code.strip().lower() for code in processed_codes}
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("📝 Original input")
+                for i, code in enumerate(webkodes, 1):
+                    st.write(f"{i}. `{code}`")
+            
+            with col2:
+                st.subheader("🔄 Processeret til søgning")
+                for i, code in enumerate(processed_codes, 1):
+                    st.write(f"{i}. `{code}`")
+            
+            st.subheader("🎯 Finale søgesæt (lowercase)")
+            st.write(", ".join(f"`{code}`" for code in sorted(webkode_set)))
+            
+            st.subheader("🗺️ Mapping tilbage")
+            for processed, original in original_mapping.items():
+                st.write(f"`{processed}` → `{original}`")
+            
+            st.markdown("---")
             
             with st.spinner("Søger efter filer..."):
                 results = downloader.search_images_for_codes(project_code_input, webkodes)
