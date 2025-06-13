@@ -137,19 +137,27 @@ class ICRTImageDownloader:
         # Process webkodes: strip letters if needed and maintain mapping
         processed_codes, original_mapping = self.process_webkodes(webkodes)
         
-        # Debug: Show what we're actually searching for
-        st.write("🔍 Debug - Processed codes we're searching for:")
-        for i, (original, processed) in enumerate(zip(webkodes, processed_codes)):
-            st.write(f"  {i+1}. '{original}' → '{processed}'")
-        
         # Create a set of processed webkodes for faster lookup (convert to lowercase)
         webkode_set = {code.strip().lower() for code in processed_codes}
         
-        # Debug: Show the lookup set
-        st.write(f"🎯 Webkode lookup set: {list(webkode_set)}")
-        
-        # Debug: Show the mapping
-        st.write(f"📋 Original mapping: {original_mapping}")
+        # Show debug section in frontend
+        with st.expander("🔍 Debug: Webkoder brugt til søgning", expanded=True):
+            st.write("**Original webkoder fra input:**")
+            for i, code in enumerate(webkodes, 1):
+                st.write(f"{i}. `{code}`")
+            
+            st.write("**Processerede webkoder (brugt til database søgning):**")
+            for i, code in enumerate(processed_codes, 1):
+                st.write(f"{i}. `{code}`")
+            
+            st.write("**Søgesæt (lowercase til matching):**")
+            sorted_set = sorted(list(webkode_set))
+            for i, code in enumerate(sorted_set, 1):
+                st.write(f"{i}. `{code}`")
+            
+            st.write("**Mapping tilbage til originale koder:**")
+            for processed, original in original_mapping.items():
+                st.write(f"`{processed}` → `{original}`")
         
         # Build GraphQL query using variables
         query = """
