@@ -82,8 +82,7 @@ class ICRTImageDownloader:
             # Check if token is expired (401 error)
             if response.status_code == 401:
                 error_data = response.json() if response.headers.get('content-type') == 'application/json' else {}
-                if 'jwt expired' in str(error_data).lower() or 'expired' in str(error_data).lower():
-                    return False, {"error": "jwt_expired", "message": "JWT token has expired. Please re-authenticate."}
+                return False, {"error": "jwt_expired", "message": "JWT token has expired. Please re-authenticate."}
             
             if response.status_code == 200:
                 return True, response.json()
@@ -138,8 +137,19 @@ class ICRTImageDownloader:
         # Process webkodes: strip letters if needed and maintain mapping
         processed_codes, original_mapping = self.process_webkodes(webkodes)
         
+        # Debug: Show what we're actually searching for
+        st.write("🔍 Debug - Processed codes we're searching for:")
+        for i, (original, processed) in enumerate(zip(webkodes, processed_codes)):
+            st.write(f"  {i+1}. '{original}' → '{processed}'")
+        
         # Create a set of processed webkodes for faster lookup (convert to lowercase)
         webkode_set = {code.strip().lower() for code in processed_codes}
+        
+        # Debug: Show the lookup set
+        st.write(f"🎯 Webkode lookup set: {list(webkode_set)}")
+        
+        # Debug: Show the mapping
+        st.write(f"📋 Original mapping: {original_mapping}")
         
         # Build GraphQL query using variables
         query = """
@@ -163,7 +173,10 @@ class ICRTImageDownloader:
         
         if not success:
             # Check if JWT expired
-            if response.get('error') == 'jwt_expired' or '401' in str(response.get('error', '')):
+            if (response.get('error') == 'jwt_expired' or 
+                '401' in str(response.get('error', '')) or 
+                'jwt expired' in str(response.get('error', '')).lower()):
+                
                 st.error("🔑 Din session er udløbet. Du skal logge ind igen med dine API-oplysninger.")
                 
                 # Clear the API authentication state to force re-login
@@ -172,7 +185,7 @@ class ICRTImageDownloader:
                 
                 # Show re-authentication button
                 st.warning("Klik på knappen herunder for at gå tilbage til API login-siden.")
-                if st.button("🔄 Gå til API Login", type="primary"):
+                if st.button("🔄 Gå til API Login", type="primary", key="reauth_button"):
                     st.rerun()
                 
                 return results
@@ -208,6 +221,22 @@ class ICRTImageDownloader:
         status_text = st.empty()
         found_count = 0
         
+        # Debug: Look for our target files specifically
+        target_files_found = []
+        target_patterns = ['23022-0259', '23022-0263']  # Add your specific test patterns
+        
+        for media in media_files[:100]:  # Check first 100 files
+            filename = media.get('filename', '')
+            if any(pattern in filename.lower() for pattern in target_patterns):
+                target_files_found.append(filename)
+        
+        if target_files_found:
+            st.write(f"🎯 Found {len(target_files_found)} target files in first 100:")
+            for f in target_files_found:
+                st.write(f"  - {f}")
+        else:
+            st.write("❌ No target files found in first 100 files")
+        
         for i, media in enumerate(media_files):
             if i % 50 == 0:  # Update progress every 50 files
                 status_text.text(f"Processing images... {i+1}/{len(media_files)}")
@@ -220,12 +249,23 @@ class ICRTImageDownloader:
                 # Extract product code
                 product_code = extract_product_code(filename)
                 
+                # Debug: Show processing of target files
+                if any(pattern in filename.lower() for pattern in target_patterns):
+                    st.write(f"🔍 Target file processing:")
+                    st.write(f"  Filename: '{filename}'")
+                    st.write(f"  Extracted product code: '{product_code}'")
+                    st.write(f"  In webkode_set? {product_code in webkode_set}")
+                    st.write(f"  Webkode_set contains: {list(webkode_set)}")
+                
                 # Check for match
                 if product_code in webkode_set:
                     found_count += 1
                     
                     # Find original webkode using mapping
                     original_webkode = original_mapping.get(product_code, product_code)
+                    
+                    # Debug: Show successful match
+                    st.write(f"✅ MATCH FOUND: '{filename}' → '{original_webkode}'")
                     
                     if original_webkode not in results['found']:
                         results['found'][original_webkode] = []
