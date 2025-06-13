@@ -181,9 +181,9 @@ class ICRTImageDownloader:
                 return filename.strip().lower()
         
         def extract_numeric_part(code):
-            """Extract numeric part from webcode (e.g., IC23022-0259 -> 23022-0259)"""
-            # Remove letters from the beginning and return the numeric part
-            match = re.search(r'(\d+[-\d]*)', code)
+            """Extract numeric part from webcode (e.g., IC23022-0259-00 -> 23022-0259-00)"""
+            # Remove letters from the beginning and return the numeric part with dashes
+            match = re.search(r'(\d+(?:-\d+)*)', code)
             return match.group(1).lower() if match else code.lower()
         
         # Process files with progress tracking
