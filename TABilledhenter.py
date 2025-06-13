@@ -543,13 +543,17 @@ def main_application():
     # File upload section
     st.header("📃 Input webkoder")
     
-    # Create tabs for different input methods
-    tab1, tab2 = st.tabs(["📁 Upload Excel fil", "✏️ Indsæt tekst"])
+    # Choose input method
+    input_method = st.radio(
+        "Vælg input metode:",
+        ["📁 Upload Excel fil", "✏️ Indsæt tekst"],
+        horizontal=True
+    )
     
     webkodes = None
     project_code = ""
     
-    with tab1:
+    if input_method == "📁 Upload Excel fil":
         st.markdown("Upload dit prisark eller webskema")
         uploaded_file = st.file_uploader(
             "Her kan du bruge både prisark og webskema, filen skal bare have en fane der hedder 'Priser' og en kolonneoverskrift i række 3 der hedder 'Webkode'",
@@ -576,7 +580,7 @@ def main_application():
                     project_code = downloader.extract_project_code(first_webkode)
                     st.write(f"🔍 DEBUG: Extracted project code: '{project_code}'")
     
-    with tab2:
+    elif input_method == "✏️ Indsæt tekst":
         st.markdown("Indsæt webkoder direkte fra clipboard")
         text_input = st.text_area(
             "Indsæt webkoder her (adskilt af mellemrum, linjeskift eller kommaer):",
@@ -587,12 +591,17 @@ def main_application():
         
         if text_input:
             # Parse text input
+            st.write("🔍 DEBUG: Starting text input parsing...")
             webkodes, error = parse_text_input(text_input)
+            
+            st.write(f"🔍 DEBUG: Parse result - webkodes: {webkodes is not None}, error: {error}")
             
             if error:
                 st.error(error)
+                st.write("🔍 DEBUG: Text parsing failed with error above")
             else:
                 st.success(f"✅ Fundet {len(webkodes)} webkoder i tekst input")
+                st.write(f"🔍 DEBUG: First few webkodes: {webkodes[:3] if webkodes else 'None'}")
                 # Show preview of parsed codes
                 with st.expander("👀 Vis fundne webkoder", expanded=False):
                     st.write(", ".join(webkodes[:20]))
@@ -604,6 +613,7 @@ def main_application():
                     # Use original webkode (before any letter stripping) to extract project code
                     first_webkode = webkodes[0]
                     project_code = downloader.extract_project_code(first_webkode)
+                    st.write(f"🔍 DEBUG: Extracted project code: '{project_code}'")
     
     # Continue with the rest of the processing if webkodes were found
     if webkodes:
