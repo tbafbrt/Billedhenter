@@ -601,6 +601,11 @@ def main_application():
     
     # Continue with the rest of the processing if webkodes were found
     if webkodes:
+        # ADD SIMPLE DEBUG TEST HERE
+        st.warning("🧪 DEBUG TEST: This should always be visible if webkodes were found!")
+        st.write(f"Number of webkodes found: {len(webkodes)}")
+        st.write(f"First webkode: {webkodes[0] if webkodes else 'None'}")
+        
         # Project code input
         st.header("🏷️ Tjek projekt-koden")
         project_code_input = st.text_input(
