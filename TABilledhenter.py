@@ -410,6 +410,49 @@ def parse_excel_file(uploaded_file) -> Tuple[Optional[List[str]], Optional[str]]
     except Exception as e:
         return None, f"Error parsing Excel file: {str(e)}"
 
+def parse_text_input(text_input: str) -> Tuple[Optional[List[str]], Optional[str]]:
+    """Parse text input and extract webkodes"""
+    try:
+        if not text_input.strip():
+            return None, "Text input is empty"
+        
+        # Split by spaces, tabs, newlines, and commas
+        # This handles various paste formats
+        import re
+        webkodes = re.split(r'[\s,]+', text_input.strip())
+        
+        # Filter out empty strings and clean up
+        webkodes = [code.strip() for code in webkodes if code.strip()]
+        
+        if not webkodes:
+            return None, "No valid webkodes found in text input"
+        
+        # Basic validation - check if codes look like webkodes
+        valid_webkodes = []
+        invalid_codes = []
+        
+        for code in webkodes:
+            # Basic pattern check for webkodes (e.g., IC23022-0072-00 or similar)
+            if re.match(r'^[A-Z]{0,2}\d{5}-\d{4}-\d{2}$', code):
+                valid_webkodes.append(code)
+            else:
+                # More lenient check - at least contains numbers and dashes
+                if re.search(r'\d', code) and '-' in code:
+                    valid_webkodes.append(code)
+                else:
+                    invalid_codes.append(code)
+        
+        if invalid_codes:
+            st.warning(f"⚠️ Følgende koder ser ikke ud som gyldige webkoder: {', '.join(invalid_codes[:5])}{'...' if len(invalid_codes) > 5 else ''}")
+        
+        if not valid_webkodes:
+            return None, "No valid webkodes found. Expected format: IC23022-0072-00"
+        
+        return valid_webkodes, None
+        
+    except Exception as e:
+        return None, f"Error parsing text input: {str(e)}"
+
 def create_download_zip(selected_images: List[Dict]) -> bytes:
     """Create ZIP file with selected images"""
     zip_buffer = io.BytesIO()
@@ -443,31 +486,66 @@ def main_application():
     downloader.jwt_token = st.session_state.jwt_token
     
     # File upload section
-    st.header("📃 Upload dit prisark eller webskema")
-    uploaded_file = st.file_uploader(
-        "Her kan du bruge både prisark og webskema, filen skal bare have en fane der hedder 'Priser' og en kolonneoverskrift i række 3 der hedder 'Webkode' ",
-        type=['xlsx', 'xls']
-    )
+    st.header("📃 Input webkoder")
     
-    if uploaded_file:
-        # Parse Excel file
-        webkodes, error = parse_excel_file(uploaded_file)
+    # Create tabs for different input methods
+    tab1, tab2 = st.tabs(["📁 Upload Excel fil", "✏️ Indsæt tekst"])
+    
+    webkodes = None
+    project_code = ""
+    
+    with tab1:
+        st.markdown("Upload dit prisark eller webskema")
+        uploaded_file = st.file_uploader(
+            "Her kan du bruge både prisark og webskema, filen skal bare have en fane der hedder 'Priser' og en kolonneoverskrift i række 3 der hedder 'Webkode'",
+            type=['xlsx', 'xls']
+        )
         
-        if error:
-            st.error(error)
-            return
+        if uploaded_file:
+            # Parse Excel file
+            webkodes, error = parse_excel_file(uploaded_file)
+            
+            if error:
+                st.error(error)
+            else:
+                st.success(f"✅ Fundet {len(webkodes)} webkoder i Excel-fil")
+                # Extract project code from first webkode
+                if webkodes:
+                    project_code = downloader.extract_project_code(webkodes[0])
+    
+    with tab2:
+        st.markdown("Indsæt webkoder direkte fra clipboard")
+        text_input = st.text_area(
+            "Indsæt webkoder her (adskilt af mellemrum, linjeskift eller kommaer):",
+            placeholder="IC23022-0072-00 IC23022-0220-31 IC23022-0050-00\nIC23022-0072-10 IC23022-0054-00",
+            height=150,
+            help="Du kan indsætte webkoder adskilt af mellemrum, linjeskift eller kommaer"
+        )
         
-        st.success(f"Fundet {len(webkodes)} webkoder i Excel-fil")
-        
-        # Extract and display project code
-        project_code = ""
-        if webkodes:
-            project_code = downloader.extract_project_code(webkodes[0])
-        
+        if text_input:
+            # Parse text input
+            webkodes, error = parse_text_input(text_input)
+            
+            if error:
+                st.error(error)
+            else:
+                st.success(f"✅ Fundet {len(webkodes)} webkoder i tekst input")
+                # Show preview of parsed codes
+                with st.expander("👀 Vis fundne webkoder", expanded=False):
+                    st.write(", ".join(webkodes[:20]))
+                    if len(webkodes) > 20:
+                        st.write(f"... og {len(webkodes) - 20} flere")
+                
+                # Extract project code from first webkode
+                if webkodes:
+                    project_code = downloader.extract_project_code(webkodes[0])
+    
+    # Continue with the rest of the processing if webkodes were found
+    if webkodes:
         # Project code input
         st.header("🏷️ Tjek projekt-koden")
         project_code_input = st.text_input(
-            "Projektkoden bliver hentet automatisk fra prisark/webskema, men kan tilpasses hvis ikke den bliver genkendt rigtigt.",
+            "Projektkoden bliver hentet automatisk fra den første webkode, men kan tilpasses hvis ikke den bliver genkendt rigtigt.",
             value=project_code,
             help="Format: LLDDDDD (e.g., IC20006) or DDDDD"
         )
