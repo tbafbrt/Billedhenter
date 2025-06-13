@@ -82,7 +82,8 @@ class ICRTImageDownloader:
             # Check if token is expired (401 error)
             if response.status_code == 401:
                 error_data = response.json() if response.headers.get('content-type') == 'application/json' else {}
-                return False, {"error": "jwt_expired", "message": "JWT token has expired. Please re-authenticate."}
+                if 'jwt expired' in str(error_data).lower() or 'expired' in str(error_data).lower():
+                    return False, {"error": "jwt_expired", "message": "JWT token has expired. Please re-authenticate."}
             
             if response.status_code == 200:
                 return True, response.json()
@@ -104,28 +105,6 @@ class ICRTImageDownloader:
         match = re.match(r'^([A-Z]{2}\d{5}|\d{5})', webkode)
         return match.group(1) if match else ""
     
-    def process_webkodes(self, webkodes: List[str]) -> Tuple[List[str], Dict[str, str]]:
-        """Process webkodes: strip letters if they start with two letters, maintain mapping"""
-        processed_codes = []
-        original_mapping = {}  # Maps processed code back to original
-        
-        for code in webkodes:
-            clean_code = code.strip()
-            # Check if starts with two letters followed by numbers
-            if re.match(r'^[A-Z]{2}\d', clean_code):
-                # Remove the first two letters
-                processed_code = clean_code[2:]
-                st.write(f"🔄 Stripped letters: '{clean_code}' → '{processed_code}'")
-            else:
-                # Keep as is
-                processed_code = clean_code
-                st.write(f"✅ Kept as is: '{clean_code}'")
-            
-            processed_codes.append(processed_code)
-            original_mapping[processed_code.lower()] = clean_code
-        
-        return processed_codes, original_mapping
-    
     def search_images_for_codes(self, project_code: str, webkodes: List[str]) -> Dict:
         """Search for images matching the webkodes using the proven filtering approach"""
         results = {
@@ -134,11 +113,10 @@ class ICRTImageDownloader:
             'suggestions': {}
         }
         
-        # Process webkodes: strip letters if needed and maintain mapping
-        processed_codes, original_mapping = self.process_webkodes(webkodes)
-        
-        # Create a set of processed webkodes for faster lookup (convert to lowercase)
-        webkode_set = {code.strip().lower() for code in processed_codes}
+        # Create a set of webkodes for faster lookup (convert to lowercase)
+        webkode_set = {code.strip().lower() for code in webkodes}
+        # Also create a set of numeric parts for flexible matching
+        numeric_webkode_set = {extract_numeric_part(code.strip()) for code in webkodes}
         
         # Build GraphQL query using variables
         query = """
@@ -162,10 +140,7 @@ class ICRTImageDownloader:
         
         if not success:
             # Check if JWT expired
-            if (response.get('error') == 'jwt_expired' or 
-                '401' in str(response.get('error', '')) or 
-                'jwt expired' in str(response.get('error', '')).lower()):
-                
+            if response.get('error') == 'jwt_expired':
                 st.error("🔑 Din session er udløbet. Du skal logge ind igen med dine API-oplysninger.")
                 
                 # Clear the API authentication state to force re-login
@@ -174,7 +149,7 @@ class ICRTImageDownloader:
                 
                 # Show re-authentication button
                 st.warning("Klik på knappen herunder for at gå tilbage til API login-siden.")
-                if st.button("🔄 Gå til API Login", type="primary", key="reauth_button"):
+                if st.button("🔄 Gå til API Login", type="primary"):
                     st.rerun()
                 
                 return results
@@ -205,26 +180,25 @@ class ICRTImageDownloader:
             else:
                 return filename.strip().lower()
         
+        def extract_numeric_part(code):
+            """Extract numeric part from webcode (e.g., IC23022-0259-00 -> 23022-0259-00)"""
+            # Remove letters from the beginning and return the numeric part with dashes
+            match = re.search(r'(\d+(?:-\d+)*)', code)
+            return match.group(1).lower() if match else code.lower()
+        
         # Process files with progress tracking
         progress_bar = st.progress(0)
         status_text = st.empty()
         found_count = 0
         
-        # Debug: Look for our target files specifically
-        target_files_found = []
-        target_patterns = ['23022-0259', '23022-0263']  # Add your specific test patterns
+        # Debug: Show what we're looking for
+        st.write(f"🔍 Debug: Looking for these webkodes:")
+        for code in webkodes[:3]:  # Show first 3
+            numeric_part = extract_numeric_part(code.strip())
+            st.write(f"  - Full: '{code.strip().lower()}' | Numeric: '{numeric_part}'")
         
-        for media in media_files[:100]:  # Check first 100 files
-            filename = media.get('filename', '')
-            if any(pattern in filename.lower() for pattern in target_patterns):
-                target_files_found.append(filename)
-        
-        if target_files_found:
-            st.write(f"🎯 Found {len(target_files_found)} target files in first 100:")
-            for f in target_files_found:
-                st.write(f"  - {f}")
-        else:
-            st.write("❌ No target files found in first 100 files")
+        # Show the numeric lookup set
+        st.write(f"🎯 Numeric lookup set contains: {list(numeric_webkode_set)[:5]}")
         
         for i, media in enumerate(media_files):
             if i % 50 == 0:  # Update progress every 50 files
@@ -237,32 +211,51 @@ class ICRTImageDownloader:
             if filename and image_url:
                 # Extract product code
                 product_code = extract_product_code(filename)
+                numeric_product_code = extract_numeric_part(product_code)
                 
-                # Debug: Show processing of target files
-                if any(pattern in filename.lower() for pattern in target_patterns):
-                    st.write(f"🔍 Target file processing:")
-                    st.write(f"  Filename: '{filename}'")
-                    st.write(f"  Extracted product code: '{product_code}'")
-                    st.write(f"  In webkode_set? {product_code in webkode_set}")
-                    st.write(f"  Webkode_set contains: {list(webkode_set)}")
+                # Debug: Show files that might match our target codes
+                if any(target in filename.lower() for target in ['23022-0259', '23022-0263']):
+                    st.write(f"🎯 Target file found: '{filename}'")
+                    st.write(f"   -> Product code: '{product_code}'")
+                    st.write(f"   -> Numeric part: '{numeric_product_code}'")
+                    st.write(f"   -> In numeric set? {numeric_product_code in numeric_webkode_set}")
                 
-                # Check for match
+                # Check for match (both full match and numeric match)
+                matched_webkode = None
+                match_type = ""
+                
+                # First try exact match
                 if product_code in webkode_set:
+                    # Find original webkode
+                    for original in webkodes:
+                        if original.strip().lower() == product_code:
+                            matched_webkode = original.strip()
+                            match_type = "exact"
+                            break
+                
+                # If no exact match, try numeric match
+                elif numeric_product_code in numeric_webkode_set:
+                    # Find original webkode by numeric part
+                    for original in webkodes:
+                        if extract_numeric_part(original.strip()) == numeric_product_code:
+                            matched_webkode = original.strip()
+                            match_type = "numeric"
+                            break
+                
+                if matched_webkode:
                     found_count += 1
                     
-                    # Find original webkode using mapping
-                    original_webkode = original_mapping.get(product_code, product_code)
+                    # Debug: Show successful matches
+                    if found_count <= 3:  # Show first 3 matches
+                        st.write(f"✅ Match {found_count}: '{filename}' -> '{matched_webkode}' ({match_type} match)")
                     
-                    # Debug: Show successful match
-                    st.write(f"✅ MATCH FOUND: '{filename}' → '{original_webkode}'")
+                    if matched_webkode not in results['found']:
+                        results['found'][matched_webkode] = []
                     
-                    if original_webkode not in results['found']:
-                        results['found'][original_webkode] = []
-                    
-                    results['found'][original_webkode].append({
+                    results['found'][matched_webkode].append({
                         'url': image_url,
                         'filename': filename,
-                        'webkode': original_webkode
+                        'webkode': matched_webkode
                     })
         
         # Clean up progress indicators
@@ -270,18 +263,17 @@ class ICRTImageDownloader:
         status_text.empty()
         
         # Identify missing webkodes and look for variant alternatives
-        for original_webkode in webkodes:
-            clean_webkode = original_webkode.strip()
+        for webkode in webkodes:
+            clean_webkode = webkode.strip()
             if clean_webkode not in results['found']:
                 results['missing'].append(clean_webkode)
                 
                 # Look for variant alternatives if this webkode is missing
                 # Extract base product code (remove last -DD part)
-                processed_code = processed_codes[webkodes.index(original_webkode)]
-                if '-' in processed_code:
-                    parts = processed_code.split('-')
-                    if len(parts) >= 3:  # Format: DDDDD-DDDD-DD
-                        base_product = '-'.join(parts[:-1])  # e.g., "18486-0047"
+                if '-' in clean_webkode:
+                    parts = clean_webkode.split('-')
+                    if len(parts) >= 3:  # Format: LLDDDDD-DDDD-DD
+                        base_product = '-'.join(parts[:-1])  # e.g., "OT18486-0047"
                         
                         st.write(f"🔍 Foreslag til alternativer til {clean_webkode} (baseret på: {base_product})")
                         
@@ -300,8 +292,10 @@ class ICRTImageDownloader:
                                     if len(file_parts) >= 3:
                                         file_base = '-'.join(file_parts[:-1])
                                         
-                                        # If same base product but different variant
-                                        if file_base.lower() == base_product.lower() and product_code.lower() != processed_code.lower():
+                                        # If same base product but different variant (using numeric matching)
+                                        if (file_base.lower() == base_product.lower() or 
+                                            extract_numeric_part(file_base) == extract_numeric_part(base_product)) and \
+                                           product_code.lower() != clean_webkode.lower():
                                             variant_suggestions.append({
                                                 'url': media.get('image', ''),
                                                 'filename': filename,
@@ -543,17 +537,13 @@ def main_application():
     # File upload section
     st.header("📃 Input webkoder")
     
-    # Choose input method
-    input_method = st.radio(
-        "Vælg input metode:",
-        ["📁 Upload Excel fil", "✏️ Indsæt tekst"],
-        horizontal=True
-    )
+    # Create tabs for different input methods
+    tab1, tab2 = st.tabs(["📁 Upload Excel fil", "✏️ Indsæt tekst"])
     
     webkodes = None
     project_code = ""
     
-    if input_method == "📁 Upload Excel fil":
+    with tab1:
         st.markdown("Upload dit prisark eller webskema")
         uploaded_file = st.file_uploader(
             "Her kan du bruge både prisark og webskema, filen skal bare have en fane der hedder 'Priser' og en kolonneoverskrift i række 3 der hedder 'Webkode'",
@@ -562,25 +552,17 @@ def main_application():
         
         if uploaded_file:
             # Parse Excel file
-            st.write("🔍 DEBUG: Starting Excel file parsing...")
             webkodes, error = parse_excel_file(uploaded_file)
-            
-            st.write(f"🔍 DEBUG: Parse result - webkodes: {webkodes is not None}, error: {error}")
             
             if error:
                 st.error(error)
-                st.write("🔍 DEBUG: Excel parsing failed with error above")
             else:
                 st.success(f"✅ Fundet {len(webkodes)} webkoder i Excel-fil")
-                st.write(f"🔍 DEBUG: First few webkodes: {webkodes[:3] if webkodes else 'None'}")
                 # Extract project code from first webkode
                 if webkodes:
-                    # Use original webkode (before any letter stripping) to extract project code
-                    first_webkode = webkodes[0]
-                    project_code = downloader.extract_project_code(first_webkode)
-                    st.write(f"🔍 DEBUG: Extracted project code: '{project_code}'")
+                    project_code = downloader.extract_project_code(webkodes[0])
     
-    elif input_method == "✏️ Indsæt tekst":
+    with tab2:
         st.markdown("Indsæt webkoder direkte fra clipboard")
         text_input = st.text_area(
             "Indsæt webkoder her (adskilt af mellemrum, linjeskift eller kommaer):",
@@ -591,17 +573,12 @@ def main_application():
         
         if text_input:
             # Parse text input
-            st.write("🔍 DEBUG: Starting text input parsing...")
             webkodes, error = parse_text_input(text_input)
-            
-            st.write(f"🔍 DEBUG: Parse result - webkodes: {webkodes is not None}, error: {error}")
             
             if error:
                 st.error(error)
-                st.write("🔍 DEBUG: Text parsing failed with error above")
             else:
                 st.success(f"✅ Fundet {len(webkodes)} webkoder i tekst input")
-                st.write(f"🔍 DEBUG: First few webkodes: {webkodes[:3] if webkodes else 'None'}")
                 # Show preview of parsed codes
                 with st.expander("👀 Vis fundne webkoder", expanded=False):
                     st.write(", ".join(webkodes[:20]))
@@ -610,18 +587,10 @@ def main_application():
                 
                 # Extract project code from first webkode
                 if webkodes:
-                    # Use original webkode (before any letter stripping) to extract project code
-                    first_webkode = webkodes[0]
-                    project_code = downloader.extract_project_code(first_webkode)
-                    st.write(f"🔍 DEBUG: Extracted project code: '{project_code}'")
+                    project_code = downloader.extract_project_code(webkodes[0])
     
     # Continue with the rest of the processing if webkodes were found
     if webkodes:
-        # ADD SIMPLE DEBUG TEST HERE
-        st.warning("🧪 DEBUG TEST: This should always be visible if webkodes were found!")
-        st.write(f"Number of webkodes found: {len(webkodes)}")
-        st.write(f"First webkode: {webkodes[0] if webkodes else 'None'}")
-        
         # Project code input
         st.header("🏷️ Tjek projekt-koden")
         project_code_input = st.text_input(
@@ -634,34 +603,6 @@ def main_application():
             if not project_code_input:
                 st.error("Projectkode ikke fundet, prøv igen")
                 return
-            
-            # Show debug BEFORE calling the search function
-            st.header("🔍 Debug: Webkoder der bruges til søgning")
-            
-            # Process webkodes here to show debug info
-            processed_codes, original_mapping = downloader.process_webkodes(webkodes)
-            webkode_set = {code.strip().lower() for code in processed_codes}
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("📝 Original input")
-                for i, code in enumerate(webkodes, 1):
-                    st.write(f"{i}. `{code}`")
-            
-            with col2:
-                st.subheader("🔄 Processeret til søgning")
-                for i, code in enumerate(processed_codes, 1):
-                    st.write(f"{i}. `{code}`")
-            
-            st.subheader("🎯 Finale søgesæt (lowercase)")
-            st.write(", ".join(f"`{code}`" for code in sorted(webkode_set)))
-            
-            st.subheader("🗺️ Mapping tilbage")
-            for processed, original in original_mapping.items():
-                st.write(f"`{processed}` → `{original}`")
-            
-            st.markdown("---")
             
             with st.spinner("Søger efter filer..."):
                 results = downloader.search_images_for_codes(project_code_input, webkodes)
