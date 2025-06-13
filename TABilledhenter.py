@@ -200,6 +200,20 @@ class ICRTImageDownloader:
         # Show the numeric lookup set
         st.write(f"🎯 Numeric lookup set contains: {list(numeric_webkode_set)[:5]}")
         
+        # Debug: Look for ANY files containing our target numbers
+        target_files_found = []
+        for media in media_files:
+            filename = media.get('filename', '')
+            if filename and ('23022-0259' in filename.lower() or '23022-0263' in filename.lower()):
+                target_files_found.append(filename)
+        
+        if target_files_found:
+            st.write(f"🎯 Found {len(target_files_found)} files containing target numbers:")
+            for f in target_files_found[:5]:  # Show first 5
+                st.write(f"  - {f}")
+        else:
+            st.write("❌ No files found containing '23022-0259' or '23022-0263'")
+        
         for i, media in enumerate(media_files):
             if i % 50 == 0:  # Update progress every 50 files
                 status_text.text(f"Processing images... {i+1}/{len(media_files)}")
@@ -213,12 +227,13 @@ class ICRTImageDownloader:
                 product_code = extract_product_code(filename)
                 numeric_product_code = extract_numeric_part(product_code)
                 
-                # Debug: Show files that might match our target codes
-                if any(target in filename.lower() for target in ['23022-0259', '23022-0263']):
-                    st.write(f"🎯 Target file found: '{filename}'")
-                    st.write(f"   -> Product code: '{product_code}'")
-                    st.write(f"   -> Numeric part: '{numeric_product_code}'")
-                    st.write(f"   -> In numeric set? {numeric_product_code in numeric_webkode_set}")
+                # Debug: Show detailed processing for target files
+                if '23022-0259' in filename.lower() or '23022-0263' in filename.lower():
+                    st.write(f"🔍 Processing target file: '{filename}'")
+                    st.write(f"  -> extract_product_code: '{product_code}'")
+                    st.write(f"  -> extract_numeric_part: '{numeric_product_code}'")
+                    st.write(f"  -> In webkode_set? {product_code in webkode_set}")
+                    st.write(f"  -> In numeric_webkode_set? {numeric_product_code in numeric_webkode_set}")
                 
                 # Check for match (both full match and numeric match)
                 matched_webkode = None
