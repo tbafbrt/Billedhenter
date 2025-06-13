@@ -115,6 +115,8 @@ class ICRTImageDownloader:
         
         # Create a set of webkodes for faster lookup (convert to lowercase)
         webkode_set = {code.strip().lower() for code in webkodes}
+        # Also create a set of numeric parts for flexible matching
+        numeric_webkode_set = {extract_numeric_part(code.strip()) for code in webkodes}
         
         # Build GraphQL query using variables
         query = """
@@ -178,6 +180,12 @@ class ICRTImageDownloader:
             else:
                 return filename.strip().lower()
         
+        def extract_numeric_part(code):
+            """Extract numeric part from webcode (e.g., IC23022-0259 -> 23022-0259)"""
+            # Remove letters from the beginning and return the numeric part
+            match = re.search(r'(\d+[-\d]*)', code)
+            return match.group(1).lower() if match else code.lower()
+        
         # Process files with progress tracking
         progress_bar = st.progress(0)
         status_text = st.empty()
@@ -194,27 +202,38 @@ class ICRTImageDownloader:
             if filename and image_url:
                 # Extract product code
                 product_code = extract_product_code(filename)
+                numeric_product_code = extract_numeric_part(product_code)
                 
-                # Check for match
+                # Check for match (both full match and numeric match)
+                matched_webkode = None
+                
+                # First try exact match
                 if product_code in webkode_set:
-                    found_count += 1
-                    
                     # Find original webkode
-                    original_webkode = None
                     for original in webkodes:
                         if original.strip().lower() == product_code:
-                            original_webkode = original.strip()
+                            matched_webkode = original.strip()
                             break
+                
+                # If no exact match, try numeric match
+                elif numeric_product_code in numeric_webkode_set:
+                    # Find original webkode by numeric part
+                    for original in webkodes:
+                        if extract_numeric_part(original.strip()) == numeric_product_code:
+                            matched_webkode = original.strip()
+                            break
+                
+                if matched_webkode:
+                    found_count += 1
                     
-                    if original_webkode:
-                        if original_webkode not in results['found']:
-                            results['found'][original_webkode] = []
-                        
-                        results['found'][original_webkode].append({
-                            'url': image_url,
-                            'filename': filename,
-                            'webkode': original_webkode
-                        })
+                    if matched_webkode not in results['found']:
+                        results['found'][matched_webkode] = []
+                    
+                    results['found'][matched_webkode].append({
+                        'url': image_url,
+                        'filename': filename,
+                        'webkode': matched_webkode
+                    })
         
         # Clean up progress indicators
         progress_bar.empty()
@@ -250,8 +269,10 @@ class ICRTImageDownloader:
                                     if len(file_parts) >= 3:
                                         file_base = '-'.join(file_parts[:-1])
                                         
-                                        # If same base product but different variant
-                                        if file_base.lower() == base_product.lower() and product_code.lower() != clean_webkode.lower():
+                                        # If same base product but different variant (using numeric matching)
+                                        if (file_base.lower() == base_product.lower() or 
+                                            extract_numeric_part(file_base) == extract_numeric_part(base_product)) and \
+                                           product_code.lower() != clean_webkode.lower():
                                             variant_suggestions.append({
                                                 'url': media.get('image', ''),
                                                 'filename': filename,
