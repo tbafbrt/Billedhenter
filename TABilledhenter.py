@@ -558,17 +558,23 @@ def main_application():
         
         if uploaded_file:
             # Parse Excel file
+            st.write("🔍 DEBUG: Starting Excel file parsing...")
             webkodes, error = parse_excel_file(uploaded_file)
+            
+            st.write(f"🔍 DEBUG: Parse result - webkodes: {webkodes is not None}, error: {error}")
             
             if error:
                 st.error(error)
+                st.write("🔍 DEBUG: Excel parsing failed with error above")
             else:
                 st.success(f"✅ Fundet {len(webkodes)} webkoder i Excel-fil")
+                st.write(f"🔍 DEBUG: First few webkodes: {webkodes[:3] if webkodes else 'None'}")
                 # Extract project code from first webkode
                 if webkodes:
                     # Use original webkode (before any letter stripping) to extract project code
                     first_webkode = webkodes[0]
                     project_code = downloader.extract_project_code(first_webkode)
+                    st.write(f"🔍 DEBUG: Extracted project code: '{project_code}'")
     
     with tab2:
         st.markdown("Indsæt webkoder direkte fra clipboard")
