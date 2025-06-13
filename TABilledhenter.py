@@ -191,6 +191,14 @@ class ICRTImageDownloader:
         status_text = st.empty()
         found_count = 0
         
+        # Debug: Show what we're looking for
+        st.write(f"🔍 Debug: Looking for these webkodes:")
+        for code in webkodes[:5]:  # Show first 5
+            numeric_part = extract_numeric_part(code.strip())
+            st.write(f"  - Full: '{code.strip().lower()}' | Numeric: '{numeric_part}'")
+        if len(webkodes) > 5:
+            st.write(f"  ... and {len(webkodes) - 5} more")
+        
         for i, media in enumerate(media_files):
             if i % 50 == 0:  # Update progress every 50 files
                 status_text.text(f"Processing images... {i+1}/{len(media_files)}")
@@ -204,8 +212,13 @@ class ICRTImageDownloader:
                 product_code = extract_product_code(filename)
                 numeric_product_code = extract_numeric_part(product_code)
                 
+                # Debug: Show some examples of what we find
+                if i < 10:  # Show first 10 files
+                    st.write(f"📁 Debug file {i+1}: '{filename}' -> Full: '{product_code}' | Numeric: '{numeric_product_code}'")
+                
                 # Check for match (both full match and numeric match)
                 matched_webkode = None
+                match_type = ""
                 
                 # First try exact match
                 if product_code in webkode_set:
@@ -213,6 +226,7 @@ class ICRTImageDownloader:
                     for original in webkodes:
                         if original.strip().lower() == product_code:
                             matched_webkode = original.strip()
+                            match_type = "exact"
                             break
                 
                 # If no exact match, try numeric match
@@ -221,10 +235,15 @@ class ICRTImageDownloader:
                     for original in webkodes:
                         if extract_numeric_part(original.strip()) == numeric_product_code:
                             matched_webkode = original.strip()
+                            match_type = "numeric"
                             break
                 
                 if matched_webkode:
                     found_count += 1
+                    
+                    # Debug: Show successful matches
+                    if found_count <= 5:  # Show first 5 matches
+                        st.write(f"✅ Match {found_count}: '{filename}' -> '{matched_webkode}' ({match_type} match)")
                     
                     if matched_webkode not in results['found']:
                         results['found'][matched_webkode] = []
