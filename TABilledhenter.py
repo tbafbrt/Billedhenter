@@ -246,15 +246,21 @@ class ICRTImageDownloader:
                     st.write(f"  In webkode_set? {product_code in webkode_set}")
                     st.write(f"  Webkode_set contains: {list(webkode_set)}")
                 
-                # Check for match
-                if product_code in webkode_set:
+                # Check for match - CHANGED TO USE "CONTAINS" LOGIC
+                matched_code = None
+                for search_code in webkode_set:
+                    if search_code in product_code.lower():  # Check if search code is contained in filename
+                        matched_code = search_code
+                        break
+                
+                if matched_code:
                     found_count += 1
                     
                     # Find original webkode using mapping
-                    original_webkode = original_mapping.get(product_code, product_code)
+                    original_webkode = original_mapping.get(matched_code, matched_code)
                     
                     # Debug: Show successful match
-                    st.write(f"✅ MATCH FOUND: '{filename}' → '{original_webkode}'")
+                    st.write(f"✅ MATCH FOUND: '{filename}' contains '{matched_code}' → '{original_webkode}'")
                     
                     if original_webkode not in results['found']:
                         results['found'][original_webkode] = []
