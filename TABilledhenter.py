@@ -105,6 +105,28 @@ class ICRTImageDownloader:
         match = re.match(r'^([A-Z]{2}\d{5}|\d{5})', webkode)
         return match.group(1) if match else ""
     
+    def process_webkodes(self, webkodes: List[str]) -> Tuple[List[str], Dict[str, str]]:
+        """Process webkodes: strip letters if they start with two letters, maintain mapping"""
+        processed_codes = []
+        original_mapping = {}  # Maps processed code back to original
+        
+        for code in webkodes:
+            clean_code = code.strip()
+            # Check if starts with two letters followed by numbers
+            if re.match(r'^[A-Z]{2}\d', clean_code):
+                # Remove the first two letters
+                processed_code = clean_code[2:]
+                st.write(f"🔄 Stripped letters: '{clean_code}' → '{processed_code}'")
+            else:
+                # Keep as is
+                processed_code = clean_code
+                st.write(f"✅ Kept as is: '{clean_code}'")
+            
+            processed_codes.append(processed_code)
+            original_mapping[processed_code.lower()] = clean_code
+        
+        return processed_codes, original_mapping
+    
     def search_images_for_codes(self, project_code: str, webkodes: List[str]) -> Dict:
         """Search for images matching the webkodes using the proven filtering approach"""
         results = {
@@ -113,8 +135,11 @@ class ICRTImageDownloader:
             'suggestions': {}
         }
         
-        # Create a set of webkodes for faster lookup (convert to lowercase)
-        webkode_set = {code.strip().lower() for code in webkodes}
+        # Process webkodes: strip letters if needed and maintain mapping
+        processed_codes, original_mapping = self.process_webkodes(webkodes)
+        
+        # Create a set of processed webkodes for faster lookup (convert to lowercase)
+        webkode_set = {code.strip().lower() for code in processed_codes}
         
         # Build GraphQL query using variables
         query = """
@@ -199,39 +224,35 @@ class ICRTImageDownloader:
                 if product_code in webkode_set:
                     found_count += 1
                     
-                    # Find original webkode
-                    original_webkode = None
-                    for original in webkodes:
-                        if original.strip().lower() == product_code:
-                            original_webkode = original.strip()
-                            break
+                    # Find original webkode using mapping
+                    original_webkode = original_mapping.get(product_code, product_code)
                     
-                    if original_webkode:
-                        if original_webkode not in results['found']:
-                            results['found'][original_webkode] = []
-                        
-                        results['found'][original_webkode].append({
-                            'url': image_url,
-                            'filename': filename,
-                            'webkode': original_webkode
-                        })
+                    if original_webkode not in results['found']:
+                        results['found'][original_webkode] = []
+                    
+                    results['found'][original_webkode].append({
+                        'url': image_url,
+                        'filename': filename,
+                        'webkode': original_webkode
+                    })
         
         # Clean up progress indicators
         progress_bar.empty()
         status_text.empty()
         
         # Identify missing webkodes and look for variant alternatives
-        for webkode in webkodes:
-            clean_webkode = webkode.strip()
+        for original_webkode in webkodes:
+            clean_webkode = original_webkode.strip()
             if clean_webkode not in results['found']:
                 results['missing'].append(clean_webkode)
                 
                 # Look for variant alternatives if this webkode is missing
                 # Extract base product code (remove last -DD part)
-                if '-' in clean_webkode:
-                    parts = clean_webkode.split('-')
-                    if len(parts) >= 3:  # Format: LLDDDDD-DDDD-DD
-                        base_product = '-'.join(parts[:-1])  # e.g., "OT18486-0047"
+                processed_code = processed_codes[webkodes.index(original_webkode)]
+                if '-' in processed_code:
+                    parts = processed_code.split('-')
+                    if len(parts) >= 3:  # Format: DDDDD-DDDD-DD
+                        base_product = '-'.join(parts[:-1])  # e.g., "18486-0047"
                         
                         st.write(f"🔍 Foreslag til alternativer til {clean_webkode} (baseret på: {base_product})")
                         
@@ -251,7 +272,7 @@ class ICRTImageDownloader:
                                         file_base = '-'.join(file_parts[:-1])
                                         
                                         # If same base product but different variant
-                                        if file_base.lower() == base_product.lower() and product_code.lower() != clean_webkode.lower():
+                                        if file_base.lower() == base_product.lower() and product_code.lower() != processed_code.lower():
                                             variant_suggestions.append({
                                                 'url': media.get('image', ''),
                                                 'filename': filename,
