@@ -163,7 +163,7 @@ class ICRTImageDownloader:
         
         if not success:
             # Check if JWT expired
-            if response.get('error') == 'jwt_expired':
+            if response.get('error') == 'jwt_expired' or '401' in str(response.get('error', '')):
                 st.error("🔑 Din session er udløbet. Du skal logge ind igen med dine API-oplysninger.")
                 
                 # Clear the API authentication state to force re-login
@@ -537,7 +537,9 @@ def main_application():
                 st.success(f"✅ Fundet {len(webkodes)} webkoder i Excel-fil")
                 # Extract project code from first webkode
                 if webkodes:
-                    project_code = downloader.extract_project_code(webkodes[0])
+                    # Use original webkode (before any letter stripping) to extract project code
+                    first_webkode = webkodes[0]
+                    project_code = downloader.extract_project_code(first_webkode)
     
     with tab2:
         st.markdown("Indsæt webkoder direkte fra clipboard")
@@ -564,7 +566,9 @@ def main_application():
                 
                 # Extract project code from first webkode
                 if webkodes:
-                    project_code = downloader.extract_project_code(webkodes[0])
+                    # Use original webkode (before any letter stripping) to extract project code
+                    first_webkode = webkodes[0]
+                    project_code = downloader.extract_project_code(first_webkode)
     
     # Continue with the rest of the processing if webkodes were found
     if webkodes:
