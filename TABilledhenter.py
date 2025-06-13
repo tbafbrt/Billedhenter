@@ -8,6 +8,11 @@ from PIL import Image
 from typing import List, Dict, Tuple, Optional
 import time
 import base64
+import os
+
+# Fix for inotify watch limit reached error
+os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
+os.environ["STREAMLIT_SERVER_RUN_ON_SAVE"] = "false"
 
 # Configure Streamlit page
 st.set_page_config(
