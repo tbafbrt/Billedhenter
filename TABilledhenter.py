@@ -140,25 +140,6 @@ class ICRTImageDownloader:
         # Create a set of processed webkodes for faster lookup (convert to lowercase)
         webkode_set = {code.strip().lower() for code in processed_codes}
         
-        # Show debug section in frontend
-        with st.expander("🔍 Debug: Webkoder brugt til søgning", expanded=True):
-            st.write("**Original webkoder fra input:**")
-            for i, code in enumerate(webkodes, 1):
-                st.write(f"{i}. `{code}`")
-            
-            st.write("**Processerede webkoder (brugt til database søgning):**")
-            for i, code in enumerate(processed_codes, 1):
-                st.write(f"{i}. `{code}`")
-            
-            st.write("**Søgesæt (lowercase til matching):**")
-            sorted_set = sorted(list(webkode_set))
-            for i, code in enumerate(sorted_set, 1):
-                st.write(f"{i}. `{code}`")
-            
-            st.write("**Mapping tilbage til originale koder:**")
-            for processed, original in original_mapping.items():
-                st.write(f"`{processed}` → `{original}`")
-        
         # Build GraphQL query using variables
         query = """
         query GetProjectMedia($icrtcode: String!) {
@@ -632,6 +613,34 @@ def main_application():
             if not project_code_input:
                 st.error("Projectkode ikke fundet, prøv igen")
                 return
+            
+            # Show debug BEFORE calling the search function
+            st.header("🔍 Debug: Webkoder der bruges til søgning")
+            
+            # Process webkodes here to show debug info
+            processed_codes, original_mapping = downloader.process_webkodes(webkodes)
+            webkode_set = {code.strip().lower() for code in processed_codes}
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("📝 Original input")
+                for i, code in enumerate(webkodes, 1):
+                    st.write(f"{i}. `{code}`")
+            
+            with col2:
+                st.subheader("🔄 Processeret til søgning")
+                for i, code in enumerate(processed_codes, 1):
+                    st.write(f"{i}. `{code}`")
+            
+            st.subheader("🎯 Finale søgesæt (lowercase)")
+            st.write(", ".join(f"`{code}`" for code in sorted(webkode_set)))
+            
+            st.subheader("🗺️ Mapping tilbage")
+            for processed, original in original_mapping.items():
+                st.write(f"`{processed}` → `{original}`")
+            
+            st.markdown("---")
             
             with st.spinner("Søger efter filer..."):
                 results = downloader.search_images_for_codes(project_code_input, webkodes)
