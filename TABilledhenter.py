@@ -193,11 +193,12 @@ class ICRTImageDownloader:
         
         # Debug: Show what we're looking for
         st.write(f"🔍 Debug: Looking for these webkodes:")
-        for code in webkodes[:5]:  # Show first 5
+        for code in webkodes[:3]:  # Show first 3
             numeric_part = extract_numeric_part(code.strip())
             st.write(f"  - Full: '{code.strip().lower()}' | Numeric: '{numeric_part}'")
-        if len(webkodes) > 5:
-            st.write(f"  ... and {len(webkodes) - 5} more")
+        
+        # Show the numeric lookup set
+        st.write(f"🎯 Numeric lookup set contains: {list(numeric_webkode_set)[:5]}")
         
         for i, media in enumerate(media_files):
             if i % 50 == 0:  # Update progress every 50 files
@@ -212,9 +213,12 @@ class ICRTImageDownloader:
                 product_code = extract_product_code(filename)
                 numeric_product_code = extract_numeric_part(product_code)
                 
-                # Debug: Show some examples of what we find
-                if i < 10:  # Show first 10 files
-                    st.write(f"📁 Debug file {i+1}: '{filename}' -> Full: '{product_code}' | Numeric: '{numeric_product_code}'")
+                # Debug: Show files that might match our target codes
+                if any(target in filename.lower() for target in ['23022-0259', '23022-0263']):
+                    st.write(f"🎯 Target file found: '{filename}'")
+                    st.write(f"   -> Product code: '{product_code}'")
+                    st.write(f"   -> Numeric part: '{numeric_product_code}'")
+                    st.write(f"   -> In numeric set? {numeric_product_code in numeric_webkode_set}")
                 
                 # Check for match (both full match and numeric match)
                 matched_webkode = None
@@ -242,7 +246,7 @@ class ICRTImageDownloader:
                     found_count += 1
                     
                     # Debug: Show successful matches
-                    if found_count <= 5:  # Show first 5 matches
+                    if found_count <= 3:  # Show first 3 matches
                         st.write(f"✅ Match {found_count}: '{filename}' -> '{matched_webkode}' ({match_type} match)")
                     
                     if matched_webkode not in results['found']:
