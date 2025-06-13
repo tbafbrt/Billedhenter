@@ -105,6 +105,28 @@ class ICRTImageDownloader:
         match = re.match(r'^([A-Z]{2}\d{5}|\d{5})', webkode)
         return match.group(1) if match else ""
     
+    def process_webkodes(self, webkodes: List[str]) -> Tuple[List[str], Dict[str, str]]:
+        """Process webkodes: strip letters if they start with two letters, maintain mapping"""
+        processed_codes = []
+        original_mapping = {}  # Maps processed code back to original
+        
+        for code in webkodes:
+            clean_code = code.strip()
+            # Check if starts with two letters followed by numbers
+            if re.match(r'^[A-Z]{2}\d', clean_code):
+                # Remove the first two letters
+                processed_code = clean_code[2:]
+                st.write(f"🔄 Stripped letters: '{clean_code}' → '{processed_code}'")
+            else:
+                # Keep as is
+                processed_code = clean_code
+                st.write(f"✅ Kept as is: '{clean_code}'")
+            
+            processed_codes.append(processed_code)
+            original_mapping[processed_code.lower()] = clean_code
+        
+        return processed_codes, original_mapping
+    
     def search_images_for_codes(self, project_code: str, webkodes: List[str]) -> Dict:
         """Search for images matching the webkodes using the proven filtering approach"""
         results = {
@@ -113,10 +135,11 @@ class ICRTImageDownloader:
             'suggestions': {}
         }
         
-        # Create a set of webkodes for faster lookup (convert to lowercase)
-        webkode_set = {code.strip().lower() for code in webkodes}
-        # Also create a set of numeric parts for flexible matching
-        numeric_webkode_set = {extract_numeric_part(code.strip()) for code in webkodes}
+        # Process webkodes: strip letters if needed and maintain mapping
+        processed_codes, original_mapping = self.process_webkodes(webkodes)
+        
+        # Create a set of processed webkodes for faster lookup (convert to lowercase)
+        webkode_set = {code.strip().lower() for code in processed_codes}
         
         # Build GraphQL query using variables
         query = """
@@ -180,25 +203,10 @@ class ICRTImageDownloader:
             else:
                 return filename.strip().lower()
         
-        def extract_numeric_part(code):
-            """Extract numeric part from webcode (e.g., IC23022-0259-00 -> 23022-0259-00)"""
-            # Remove letters from the beginning and return the numeric part with dashes
-            match = re.search(r'(\d+(?:-\d+)*)', code)
-            return match.group(1).lower() if match else code.lower()
-        
         # Process files with progress tracking
         progress_bar = st.progress(0)
         status_text = st.empty()
         found_count = 0
-        
-        # Debug: Show what we're looking for
-        st.write(f"🔍 Debug: Looking for these webkodes:")
-        for code in webkodes[:3]:  # Show first 3
-            numeric_part = extract_numeric_part(code.strip())
-            st.write(f"  - Full: '{code.strip().lower()}' | Numeric: '{numeric_part}'")
-        
-        # Show the numeric lookup set
-        st.write(f"🎯 Numeric lookup set contains: {list(numeric_webkode_set)[:5]}")
         
         for i, media in enumerate(media_files):
             if i % 50 == 0:  # Update progress every 50 files
@@ -211,51 +219,21 @@ class ICRTImageDownloader:
             if filename and image_url:
                 # Extract product code
                 product_code = extract_product_code(filename)
-                numeric_product_code = extract_numeric_part(product_code)
                 
-                # Debug: Show files that might match our target codes
-                if any(target in filename.lower() for target in ['23022-0259', '23022-0263']):
-                    st.write(f"🎯 Target file found: '{filename}'")
-                    st.write(f"   -> Product code: '{product_code}'")
-                    st.write(f"   -> Numeric part: '{numeric_product_code}'")
-                    st.write(f"   -> In numeric set? {numeric_product_code in numeric_webkode_set}")
-                
-                # Check for match (both full match and numeric match)
-                matched_webkode = None
-                match_type = ""
-                
-                # First try exact match
+                # Check for match
                 if product_code in webkode_set:
-                    # Find original webkode
-                    for original in webkodes:
-                        if original.strip().lower() == product_code:
-                            matched_webkode = original.strip()
-                            match_type = "exact"
-                            break
-                
-                # If no exact match, try numeric match
-                elif numeric_product_code in numeric_webkode_set:
-                    # Find original webkode by numeric part
-                    for original in webkodes:
-                        if extract_numeric_part(original.strip()) == numeric_product_code:
-                            matched_webkode = original.strip()
-                            match_type = "numeric"
-                            break
-                
-                if matched_webkode:
                     found_count += 1
                     
-                    # Debug: Show successful matches
-                    if found_count <= 3:  # Show first 3 matches
-                        st.write(f"✅ Match {found_count}: '{filename}' -> '{matched_webkode}' ({match_type} match)")
+                    # Find original webkode using mapping
+                    original_webkode = original_mapping.get(product_code, product_code)
                     
-                    if matched_webkode not in results['found']:
-                        results['found'][matched_webkode] = []
+                    if original_webkode not in results['found']:
+                        results['found'][original_webkode] = []
                     
-                    results['found'][matched_webkode].append({
+                    results['found'][original_webkode].append({
                         'url': image_url,
                         'filename': filename,
-                        'webkode': matched_webkode
+                        'webkode': original_webkode
                     })
         
         # Clean up progress indicators
@@ -263,17 +241,18 @@ class ICRTImageDownloader:
         status_text.empty()
         
         # Identify missing webkodes and look for variant alternatives
-        for webkode in webkodes:
-            clean_webkode = webkode.strip()
+        for original_webkode in webkodes:
+            clean_webkode = original_webkode.strip()
             if clean_webkode not in results['found']:
                 results['missing'].append(clean_webkode)
                 
                 # Look for variant alternatives if this webkode is missing
                 # Extract base product code (remove last -DD part)
-                if '-' in clean_webkode:
-                    parts = clean_webkode.split('-')
-                    if len(parts) >= 3:  # Format: LLDDDDD-DDDD-DD
-                        base_product = '-'.join(parts[:-1])  # e.g., "OT18486-0047"
+                processed_code = processed_codes[webkodes.index(original_webkode)]
+                if '-' in processed_code:
+                    parts = processed_code.split('-')
+                    if len(parts) >= 3:  # Format: DDDDD-DDDD-DD
+                        base_product = '-'.join(parts[:-1])  # e.g., "18486-0047"
                         
                         st.write(f"🔍 Foreslag til alternativer til {clean_webkode} (baseret på: {base_product})")
                         
@@ -292,10 +271,8 @@ class ICRTImageDownloader:
                                     if len(file_parts) >= 3:
                                         file_base = '-'.join(file_parts[:-1])
                                         
-                                        # If same base product but different variant (using numeric matching)
-                                        if (file_base.lower() == base_product.lower() or 
-                                            extract_numeric_part(file_base) == extract_numeric_part(base_product)) and \
-                                           product_code.lower() != clean_webkode.lower():
+                                        # If same base product but different variant
+                                        if file_base.lower() == base_product.lower() and product_code.lower() != processed_code.lower():
                                             variant_suggestions.append({
                                                 'url': media.get('image', ''),
                                                 'filename': filename,
