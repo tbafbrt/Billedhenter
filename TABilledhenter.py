@@ -500,31 +500,28 @@ def main_application():
     project_code = ""
     
     with tab1:
-    st.markdown("Indsæt webkoder direkte fra clipboard")
-    text_input = st.text_area(
-        "Indsæt webkoder her (adskilt af mellemrum, linjeskift eller kommaer):",
-        placeholder="IC23022-0072-00 IC23022-0220-31 IC23022-0050-00\nIC23022-0072-10 IC23022-0054-00",
-        height=150,
-        help="Du kan indsætte webkoder adskilt af mellemrum, linjeskift eller kommaer"
-    )
-    
-    if text_input:
-        # Parse text input
-        webkodes, error = parse_text_input(text_input)
+        st.markdown("Indsæt webkoder direkte fra clipboard")
+        text_input = st.text_area(
+            "Indsæt webkoder her (adskilt af mellemrum, linjeskift eller kommaer):",
+            placeholder="IC23022-0072-00 IC23022-0220-31 IC23022-0050-00\nIC23022-0072-10 IC23022-0054-00",
+            height=150,
+            help="Du kan indsætte webkoder adskilt af mellemrum, linjeskift eller kommaer"
+        )
         
-        if error:
-            st.error(error)
-        else:
-            st.success(f"✅ Fundet {len(webkodes)} webkoder i tekst input")
-            # Show preview of parsed codes
-            with st.expander("👀 Vis fundne webkoder", expanded=False):
-                st.write(", ".join(webkodes[:20]))
-                if len(webkodes) > 20:
-                    st.write(f"... og {len(webkodes) - 20} flere")
+        if text_input:
+            # Parse text input
+            webkodes, error = parse_text_input(text_input)
             
-            # Extract project code from first webkode
-            if webkodes:
-                project_code = downloader.extract_project_code(webkodes[0])
+            if error:
+                st.error(error)
+            else:
+                st.success(f"✅ Fundet {len(webkodes)} webkoder i tekst input")
+                # Show preview of parsed codes
+                with st.expander("👀 Vis fundne webkoder", expanded=False):
+                    st.write(", ".join(webkodes[:20]))
+                    if len(webkodes) > 20:
+                        st.write(f"... og {len(webkodes) - 20} flere")
+    
     
     with tab2:
         st.markdown("Upload dit prisark eller webskema")
@@ -545,7 +542,6 @@ def main_application():
                 if webkodes:
                     project_code = downloader.extract_project_code(webkodes[0])
     
-
     
     # Continue with the rest of the processing if webkodes were found
     if webkodes:
