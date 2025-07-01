@@ -497,7 +497,7 @@ def main_application():
                              🗂️ I den anden fane kan du uploade et prisark eller webskema med prisark  
                             '''
     st.subheader("Her har du to muligheder for at tilføje webkoderne til dine billeder:")
-    st.text("✏️ I første fane er der en tekstboks du direkte kan copy-paste webkoderne du skal bruge billeder til ind\n 🗂️ I den anden fane kan du uploade et prisark eller webskema med prisark")
+    st.text("✏️ I første fane er der en tekstboks du direkte kan copy-paste webkoderne du skal bruge billeder til ind\n🗂️ I den anden fane kan du uploade et prisark eller webskema med prisark")
 
         
     # Create tabs for different input methods
