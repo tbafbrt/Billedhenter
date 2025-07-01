@@ -581,6 +581,7 @@ def main_application():
             # Display found images and suggestions in merged format
             if results['found'] or results['missing']:
                 st.header("✅ Vælg de billeder du vil hente ned")
+                st.text("Herunder kan du vælge de billeder du vil hente ned, du kan vælge både billeder der matcher direkte og forslag til alternativer for manglende billeder. I bunden finder du knapper til at vælge alle billeder eller alle bilelder der er direkte matches.")
                 
                 all_images = []
                 global_image_counter = 0  # Add global counter for unique keys
