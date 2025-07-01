@@ -526,6 +526,7 @@ def main_application():
                 # Extract project code from first webkode
                 if webkodes:
                     project_code = downloader.extract_project_code(webkodes[0])
+        st.text(" tryk her :dart: når du har indsat eller rettet i webkoderne i textboxen")
     
     
     with tab2:
