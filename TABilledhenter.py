@@ -492,6 +492,11 @@ def main_application():
     
     # File upload section
     st.header("📃 Input webkoder")
+    beskrivelsetilinput = '''Her har du to muligheder for at tilføje webkoderne til dine billeder:  
+                            I første fane er der en tekstboks du direkte kan copy-paste webkoderne du skal bruge billeder til ind  
+                            I den anden fane kan du uploade et prisark eller webskema med prisark  
+                            '''
+    st.markdown(beskrivelsetilinput)
     
     # Create tabs for different input methods
     tab1, tab2 = st.tabs(["✏️ Indsæt tekst","📁 Upload Excel fil"])
@@ -581,11 +586,11 @@ def main_application():
             # Display found images and suggestions in merged format
             if results['found'] or results['missing']:
                 st.header("✅ Vælg de billeder du vil hente ned")
-                beskrivelse = '''Herunder kan du vælge de billeder du vil hente ned.  
+                beskrivelsetilvalg = '''Herunder kan du vælge de billeder du vil hente ned.  
                                Du kan vælge både billeder der matcher direkte og forslag til alternativer for manglende billeder.  
                                I bunden finder du knapper til at vælge alle billeder eller alle billeder der er direkte matches.
                                '''
-                st.markdown(beskrivelse)
+                st.markdown(beskrivelsetilvalg)
 
                 all_images = []
                 global_image_counter = 0  # Add global counter for unique keys
