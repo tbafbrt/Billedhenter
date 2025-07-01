@@ -516,11 +516,9 @@ def main_application():
                 st.error(error)
             else:
                 st.success(f"✅ Fundet {len(webkodes)} webkoder i tekst input")
-                # Show preview of parsed codes
-                with st.expander("👀 Vis fundne webkoder", expanded=False):
-                    st.write(", ".join(webkodes[:20]))
-                    if len(webkodes) > 20:
-                        st.write(f"... og {len(webkodes) - 20} flere")
+                # Extract project code from first webkode
+                if webkodes:
+                    project_code = downloader.extract_project_code(webkodes[0])
     
     
     with tab2:
