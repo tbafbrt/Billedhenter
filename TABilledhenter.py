@@ -496,10 +496,12 @@ def main_application():
                              📝 I første fane er der en tekstboks du direkte kan copy-paste webkoderne du skal bruge billeder til ind  
                              🗂️ I den anden fane kan du uploade et prisark eller webskema med prisark  
                             '''
-    st.markdown(beskrivelsetilinput)
-    
+    st.subheader("Her har du to muligheder for at tilføje webkoderne til dine billeder:")
+    st.text("✏️ I første fane er der en tekstboks du direkte kan copy-paste webkoderne du skal bruge billeder til ind\n 🗂️ I den anden fane kan du uploade et prisark eller webskema med prisark")
+
+        
     # Create tabs for different input methods
-    tab1, tab2 = st.tabs(["✏️ Indsæt tekst","📁 Upload Excel fil"])
+    tab1, tab2 = st.tabs(["✏️ Indsæt tekst","🗂️ Upload Excel fil"])
     
     webkodes = None
     project_code = ""
