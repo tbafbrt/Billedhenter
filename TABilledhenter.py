@@ -581,7 +581,7 @@ def main_application():
             # Display found images and suggestions in merged format
             if results['found'] or results['missing']:
                 st.header("✅ Vælg de billeder du vil hente ned")
-                beskrivelse = ('''Herunder kan du vælge de billeder du vil hente ned.  
+                multi = '''Herunder kan du vælge de billeder du vil hente ned.  
                                Du kan vælge både billeder der matcher direkte og forslag til alternativer for manglende billeder. 
                                I bunden finder du knapper til at vælge alle billeder eller alle billeder der er direkte matches.
                                '''
