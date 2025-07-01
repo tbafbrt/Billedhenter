@@ -493,8 +493,8 @@ def main_application():
     # File upload section
     st.header("📃 Input webkoder")
     beskrivelsetilinput = '''Her har du to muligheder for at tilføje webkoderne til dine billeder:  
-                            I første fane er der en tekstboks du direkte kan copy-paste webkoderne du skal bruge billeder til ind  
-                            I den anden fane kan du uploade et prisark eller webskema med prisark  
+                            :spiral_note_pad: I første fane er der en tekstboks du direkte kan copy-paste webkoderne du skal bruge billeder til ind  
+                            :card_index_dividers:I den anden fane kan du uploade et prisark eller webskema med prisark  
                             '''
     st.markdown(beskrivelsetilinput)
     
