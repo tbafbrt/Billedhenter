@@ -494,12 +494,39 @@ def main_application():
     st.header("📃 Input webkoder")
     
     # Create tabs for different input methods
-    tab1, tab2 = st.tabs(["📁 Upload Excel fil", "✏️ Indsæt tekst"])
+    tab1, tab2 = st.tabs(["✏️ Indsæt tekst","📁 Upload Excel fil"])
     
     webkodes = None
     project_code = ""
     
     with tab1:
+    st.markdown("Indsæt webkoder direkte fra clipboard")
+    text_input = st.text_area(
+        "Indsæt webkoder her (adskilt af mellemrum, linjeskift eller kommaer):",
+        placeholder="IC23022-0072-00 IC23022-0220-31 IC23022-0050-00\nIC23022-0072-10 IC23022-0054-00",
+        height=150,
+        help="Du kan indsætte webkoder adskilt af mellemrum, linjeskift eller kommaer"
+    )
+    
+    if text_input:
+        # Parse text input
+        webkodes, error = parse_text_input(text_input)
+        
+        if error:
+            st.error(error)
+        else:
+            st.success(f"✅ Fundet {len(webkodes)} webkoder i tekst input")
+            # Show preview of parsed codes
+            with st.expander("👀 Vis fundne webkoder", expanded=False):
+                st.write(", ".join(webkodes[:20]))
+                if len(webkodes) > 20:
+                    st.write(f"... og {len(webkodes) - 20} flere")
+            
+            # Extract project code from first webkode
+            if webkodes:
+                project_code = downloader.extract_project_code(webkodes[0])
+    
+    with tab2:
         st.markdown("Upload dit prisark eller webskema")
         uploaded_file = st.file_uploader(
             "Her kan du bruge både prisark og webskema, filen skal bare have en fane der hedder 'Priser' og en kolonneoverskrift i række 3 der hedder 'Webkode'",
@@ -518,32 +545,7 @@ def main_application():
                 if webkodes:
                     project_code = downloader.extract_project_code(webkodes[0])
     
-    with tab2:
-        st.markdown("Indsæt webkoder direkte fra clipboard")
-        text_input = st.text_area(
-            "Indsæt webkoder her (adskilt af mellemrum, linjeskift eller kommaer):",
-            placeholder="IC23022-0072-00 IC23022-0220-31 IC23022-0050-00\nIC23022-0072-10 IC23022-0054-00",
-            height=150,
-            help="Du kan indsætte webkoder adskilt af mellemrum, linjeskift eller kommaer"
-        )
-        
-        if text_input:
-            # Parse text input
-            webkodes, error = parse_text_input(text_input)
-            
-            if error:
-                st.error(error)
-            else:
-                st.success(f"✅ Fundet {len(webkodes)} webkoder i tekst input")
-                # Show preview of parsed codes
-                with st.expander("👀 Vis fundne webkoder", expanded=False):
-                    st.write(", ".join(webkodes[:20]))
-                    if len(webkodes) > 20:
-                        st.write(f"... og {len(webkodes) - 20} flere")
-                
-                # Extract project code from first webkode
-                if webkodes:
-                    project_code = downloader.extract_project_code(webkodes[0])
+
     
     # Continue with the rest of the processing if webkodes were found
     if webkodes:
