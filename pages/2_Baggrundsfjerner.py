@@ -21,6 +21,7 @@ st.set_page_config(
     layout="wide"
 )
 
+
 # Initialize session state
 def init_session_state():
     """Initialize all session state variables"""
