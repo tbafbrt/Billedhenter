@@ -169,14 +169,14 @@ def process_batch_images(uploaded_files, model_name="isnet-general-use"):
 
 def show():
     """Display the background remover page"""
-    st.title("🖼️ Background Remover")
+    st.title("Baggrundsfjerner 🪄")
     
     st.markdown("""
-    Fjern baggrunden fra dine billeder automatisk! Upload et eller flere billeder og få dem processet med AI.
+    Fjern baggrunden fra dine billeder automatisk! Upload et eller flere billeder og få dem processet med KI.
     """)
     
     # File upload section
-    st.header("📁 Upload billeder")
+    st.header("Upload billeder 🛸")
     
     uploaded_files = st.file_uploader(
         "Vælg billeder der skal behandles",
@@ -197,7 +197,7 @@ def show():
         """)
     
     # Settings section
-    st.header("⚙️ Indstillinger")
+    st.header("Indstillinger ⚙️")
     
     # Model options
     model_options = {
@@ -234,10 +234,10 @@ def show():
     with col1:
         # Model selection
         selected_model_name = st.selectbox(
-            "🤖 AI Model",
+            "🤖 KI Model",
             options=list(model_options.keys()),
             index=3,  # This selects "Høj kvalitet (isnet-general-use)" as default
-            help="Vælg AI model baseret på dit billedtype"
+            help="Vælg KI model baseret på dit billedtype"
         )
         selected_model = model_options[selected_model_name]
         
@@ -279,7 +279,7 @@ def show():
     # Show model info
     with st.expander("🔍 Model information"):
         model_info = {
-            "u2net": "Generel AI model - god til de fleste billedtyper",
+            "u2net": "Generel KI model - god til de fleste billedtyper",
             "u2net_human_seg": "Optimeret til personer og menneskelige motiver",
             "u2net_cloth_seg": "Specialiseret til tøj og tekstiler",
             "isnet-general-use": "Høj kvalitet model - mere præcis men langsommere",
@@ -415,9 +415,9 @@ def show():
             st.rerun()
     
     # Help section
-    st.header("❓ Hjælp og tips")
+    st.header("Hjælp og tips ❓")
     
-    with st.expander("📖 Sådan får du de bedste resultater"):
+    with st.expander("**Sådan får du de bedste resultater 📖**"):
         st.markdown("""
         **Billedkvalitet:**
         - Brug billeder med høj opløsning
@@ -436,12 +436,12 @@ def show():
         - Motiver der blander sig med baggrunden
         """)
     
-    with st.expander("🔧 Tekniske specifikationer"):
+    with st.expander("**Tekniske specifikationer 🔧**"):
         st.markdown("""
-        **AI Modeller:** 5 forskellige modeller optimeret til forskellige billedtyper
-        **Behandlingstid:** 1-15 sekunder per billede afhængigt af størrelse og model
-        **Maksimal opløsning:** Billeder behandles i original opløsning
-        **Output formater:** JPG (med baggrund) eller PNG (med gennemsigtighed)
+        **KI Modeller:** 5 forskellige modeller optimeret til forskellige billedtyper  
+        **Behandlingstid:** 1-15 sekunder per billede afhængigt af størrelse og model  
+        **Maksimal opløsning:** Billeder behandles i original opløsning  
+        **Output formater:** JPG (med baggrund) eller PNG (med gennemsigtighed)  
         **Kvalitetsindstillinger:** 70%, 85%, eller 95% JPEG kvalitet
         """)
 

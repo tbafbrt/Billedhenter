@@ -78,17 +78,6 @@ class AuthManager:
                     st.error("Invalid username or password")
                 else:
                     st.error("Please enter both username and password")
-        
-        # Debug section for development
-        if self.is_dev_mode:
-            with st.expander("🔧 Debug: Login Configuration", expanded=False):
-                credentials = self._get_credentials()
-                if credentials:
-                    st.write("✅ Credentials loaded successfully")
-                    st.write(f"✅ Username: '{credentials['username']}'")
-                    st.write("✅ Password: [HIDDEN]")
-                else:
-                    st.write("❌ Failed to load credentials")
     
     def is_authenticated(self) -> bool:
         """Check if user is authenticated"""

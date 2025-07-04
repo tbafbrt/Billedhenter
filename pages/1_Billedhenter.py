@@ -40,7 +40,10 @@ def init_session_state():
 
 def show():
     """Display the billedhenter page"""
-    st.title("📸 T&A Billedhenter")
+    st.title("T&A Billedhenter 🚚")
+    st.write("""Her kan du hente billeder fra ICRT databasen ved at indsætte webkoder eller uploade et prisark.  
+        Du kan også vælge at omdøbe alternative billeder inden download, så du slipper for at gøre det manuelt bagefter.
+    """)
     
     # Initialize downloader
     downloader = ICRTImageDownloader()
@@ -63,7 +66,7 @@ def show():
             st.rerun()
     
     # File upload section
-    st.header("📑 Input webkoder")
+    st.header("Input webkoder 📑")
     
     st.subheader("Her har du to muligheder for at tilføje webkoderne til dine billeder:")
     st.text("✏️ I første fane er der en tekstboks du direkte kan copy-paste webkoderne du skal bruge billeder til ind\n🗂️ I den anden fane kan du uploade et prisark eller webskema med prisark")
@@ -118,7 +121,7 @@ def show():
     # Continue with the rest of the processing if webkodes were found
     if webkodes:
         # Project code input
-        st.header("🏷️ Tjek projekt-koden")
+        st.header("Tjek projekt-koden 🏷️ ")
         project_code_input = st.text_input(
             "Projektkoden bliver hentet automatisk fra den første webkode, men kan tilpasses hvis ikke den bliver genkendt rigtigt.",
             value=project_code,

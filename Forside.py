@@ -32,14 +32,14 @@ def init_session_state():
 
 def show():
     """Display the home page"""
-    st.title("T&A værktøjer")
+    st.title("Værktøjer til Test & Analyse 🛠️ ")
     
     st.markdown("""
     Her finder du forskellige værktøjer og funktioner der forhåbentlig gør dit arbejde lidt nemmere og mere effektivt.
     """)
     
     # Available tools section
-    st.header("🛠️ Tilgængelige værktøjer:")
+    st.header("Tilgængelige værktøjer:")
     
     col1, col2 = st.columns(2)
     
@@ -61,7 +61,7 @@ def show():
         st.markdown("""
         **Funktioner:**
         - Upload billder et eller flere billeder
-        - Vælg mellem forskellige lokale AI-modeller til baggrundsfjernelse
+        - Vælg mellem forskellige lokale KI-modeller til baggrundsfjernelse
         - Vælg kvalitet og format på de behandlede billeder
         - Se preview af billeder med fjernet baggrund
         - Download billeder enkeltvis eller som ZIP-fil      

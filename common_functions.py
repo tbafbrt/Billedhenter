@@ -364,9 +364,8 @@ def create_download_zip(selected_images: List[Dict]) -> bytes:
 
 def api_credentials_screen():
     """Display API credentials input"""
-    st.title("🔑 API adgang")
-    st.markdown("Indsæt API koder.")
-    
+    st.subheader("Indsæt API adgangkode 🔑")
+        
     with st.form("api_credentials"):
         client_id = st.text_input("Client ID")
         client_key = st.text_input("Client Key", type="password")
