@@ -271,7 +271,7 @@ def show():
         # Display current examples
         st.write("**Aktuelle Eksempel Ekstraktioner:**")
         for i, ext in enumerate(st.session_state.example_extractions):
-            st.write(f"• **{ext['class']}**: '{ext['text']}' - {ext['attributes']}")
+            st.write(f"• **{ext.get('class', 'N/A')}**: '{ext.get('text', 'N/A')}' - {ext.get('attributes', {})}")
         
         # Extract button
         if st.button("🚀 Start Ekstraktion", type="primary", use_container_width=True):
