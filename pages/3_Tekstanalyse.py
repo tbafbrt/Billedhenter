@@ -251,6 +251,7 @@ def show():
                 st.session_state.example_extractions = template["extractions"]
                 st.success(f"Skabelon '{selected_template}' indlæst!")
                 st.rerun()
+                st.write(f"🔍 Current example_extractions after template section: {st.session_state.example_extractions}")
         
         # Example configuration
         st.subheader("💡 Eksempel til Few-Shot Læring")
@@ -267,6 +268,9 @@ def show():
             st.session_state.example_extractions = [
                 {"class": "karakter", "text": "ROMEO", "attributes": {"følelsesmæssig_tilstand": "undren"}},
             ]
+        
+        # DEBUG LINE:
+        st.write(f"🔍 example_extractions after initialization: {st.session_state.example_extractions}")
         
         # Display current examples
         st.write("**Aktuelle Eksempel Ekstraktioner:**")
