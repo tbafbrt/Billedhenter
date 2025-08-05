@@ -114,6 +114,11 @@ class ClaudeLanguageModel(BaseLanguageModel):
                 return output
         except Exception as e:
             raise ValueError(f'Failed to parse Claude output as {self.format_type.name}: {str(e)}') from e
+    
+    def infer(self, prompt: str, **kwargs) -> str:
+        """Main inference method required by BaseLanguageModel"""
+        return self._make_request(prompt) 
+    
 
 
 @dataclasses.dataclass(init=False)
@@ -203,6 +208,10 @@ class MistralLanguageModel(BaseLanguageModel):
                 return output
         except Exception as e:
             raise ValueError(f'Failed to parse Mistral output as {self.format_type.name}: {str(e)}') from e
+        
+    def infer(self, prompt: str, **kwargs) -> str:
+        """Main inference method required by BaseLanguageModel"""
+        return self._make_request(prompt)
 
 
 # Test functions for debugging
