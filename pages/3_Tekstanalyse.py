@@ -286,6 +286,39 @@ def show():
                     with st.spinner(f"Ekstrakterer med {llm_provider}..."):
                         # Prepare examples
                         examples = []
+                        
+                        # DEBUG LINES - START:
+                        st.write("🔍 DEBUG INFO:")
+                        st.write(f"example_text: '{example_text}'")
+                        st.write(f"example_text length: {len(example_text) if example_text else 0}")
+                        st.write(f"st.session_state.example_extractions: {st.session_state.example_extractions}")
+                        st.write(f"Type of example_extractions: {type(st.session_state.example_extractions)}")
+
+                        if example_text and st.session_state.example_extractions:
+                            st.write("✅ Both example_text and example_extractions exist")
+                            extractions = []
+                            for i, ext in enumerate(st.session_state.example_extractions):
+                                st.write(f"Processing extraction {i}: {ext}")
+                                st.write(f"ext.get('class'): '{ext.get('class')}'")
+                                st.write(f"ext.get('text'): '{ext.get('text')}'")
+                                
+                                if ext.get("class") and ext.get("text"):
+                                    st.write(f"✅ Adding extraction {i} to examples")
+                                    # ... your existing code
+                                else:
+                                    st.write(f"❌ Skipping extraction {i} - missing class or text")
+                            
+                            st.write(f"Total extractions created: {len(extractions)}")
+                            st.write(f"Total examples created: {len(examples)}")
+                        else:
+                            st.write("❌ Missing example_text or example_extractions")
+                            if not example_text:
+                                st.write("Missing: example_text")
+                            if not st.session_state.example_extractions:
+                                st.write("Missing: example_extractions")
+                        
+                        # DEBUGGING LINES - SLUT
+                        
                         if example_text and st.session_state.example_extractions:
                             extractions = []
                             for ext in st.session_state.example_extractions:
