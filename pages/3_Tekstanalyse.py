@@ -289,7 +289,7 @@ def show():
                         if example_text and st.session_state.example_extractions:
                             extractions = []
                             for ext in st.session_state.example_extractions:
-                                if ext["class"] and ext["text"]:
+                                if ext.get["class"] and ext.get["text"]:
                                     extractions.append(
                                         lx.data.Extraction(
                                             extraction_class=ext["class"],
