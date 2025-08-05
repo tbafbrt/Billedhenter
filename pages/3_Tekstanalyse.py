@@ -12,7 +12,7 @@ from typing import List, Dict, Any
 
 # Import our custom backends (you'll need to create this file)
 try:
-    from pages.langextract_backends import ClaudeLanguageModel, MistralLanguageModel
+    from langextract_backends import ClaudeLanguageModel, MistralLanguageModel
     CUSTOM_BACKENDS_AVAILABLE = True
 except ImportError:
     CUSTOM_BACKENDS_AVAILABLE = False
