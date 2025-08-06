@@ -378,11 +378,15 @@ def show():
                         for class_name, extractions in class_groups.items():
                             with st.expander(f"📂 {class_name.title()} ({len(extractions)} emner)", expanded=True):
                                 for ext in extractions:
+                                    span_info = "N/A"
+                                    if hasattr(ext, 'span') and ext.span:
+                                        span_info = f"Tegn {ext.span.start} - {ext.span.end}"
+
                                     st.markdown(f"""
                                     <div style="background: #e8f5e8; padding: 1rem; border-radius: 8px; margin: 0.5rem 0; border: 1px solid #c3e6c3;">
                                         <strong>Tekst:</strong> "{ext.extraction_text}"<br>
                                         <strong>Attributter:</strong> {json.dumps(ext.attributes, indent=2, ensure_ascii=False) if ext.attributes else 'Ingen'}<br>
-                                        <strong>Position:</strong> Tegn {ext.span.start} - {ext.span.end}
+                                        <strong>Position:</strong> {span_info}
                                     </div>
                                     """, unsafe_allow_html=True)
                         
