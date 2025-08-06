@@ -393,7 +393,7 @@ def show():
                         # Visualization
                         st.subheader("📊 Interaktiv Visualisering")
                         
-                        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
+                        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=True) as f:
                             lx.io.save_annotated_documents([result], f.name)
                             html_content = lx.visualize(f.name)
                             st.components.v1.html(html_content, height=600, scrolling=True)
