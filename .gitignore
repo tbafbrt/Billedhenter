@@ -29,3 +29,6 @@ wheels/
 # IDE
 .vscode/
 .idea/
+
+# Secrets
+.streamlit/secrets.toml
