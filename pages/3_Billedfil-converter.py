@@ -190,33 +190,24 @@ def show():
     # TAB 1 - Main content area
     with tab1:
         # Main content area
-        st.header("📤 Upload Billeder")
-        
-        # File uploader with PNG support added
-        uploaded_files = st.file_uploader(
-            "Vælg AVIF, WebP eller PNG filer",
-            type=['avif', 'webp', 'png'],
-            accept_multiple_files=True,
-            help="Du kan uploade flere filer på én gang"
-        )
-        
-        if not uploaded_files:
-            # Show format info when no files uploaded
-            st.info("""
-            **📋 Understøttede formater:**
-            - **PNG**: Standard format med gennemsigtighed support ✅
-            - **WebP**: Google's web-format med god kompression ✅
-            - **AVIF**: Moderne format med fremragende kompression (kræver system support)
-            
-            ⚠️ **AVIF Note**: Hvis AVIF filer ikke virker, prøv at installere: `pip install pillow-avif-plugin`
-            """)
-        
-        # Conversion settings - moved to main area
-        st.header("⚙️ Konverteringsindstillinger")
+        st.header("Upload Billeder 📤 ")
         
         col1, col2 = st.columns(2)
         
         with col1:
+        
+            # File uploader with PNG support added
+            uploaded_files = st.file_uploader(
+                "Vælg AVIF, WebP eller PNG filer",
+                type=['avif', 'webp', 'png'],
+                accept_multiple_files=True,
+                help="Du kan uploade flere filer på én gang"
+            )
+            
+            
+            # Conversion settings - moved to main area
+            st.header("⚙️ Konverteringsindstillinger")
+
             # Output format selection
             output_format = st.selectbox(
                 "Output Format",
@@ -235,8 +226,7 @@ def show():
                 )
             else:
                 quality = None
-        
-        with col2:
+                
             # Optional resize
             resize_images = st.checkbox("🔧 Ændre størrelse på billeder")
             if resize_images:
@@ -247,6 +237,20 @@ def show():
                     max_height = st.number_input("Maks højde", min_value=100, value=1080)
             else:
                 max_width = max_height = None
+        
+        with col2:
+            
+            if not uploaded_files:
+                # Show format info when no files uploaded
+                st.info("""
+                **📋 Understøttede formater:**
+                - **PNG**: Standard format med gennemsigtighed support ✅
+                - **WebP**: Google's web-format med god kompression ✅
+                - **AVIF**: Moderne format med fremragende kompression (kræver system support)
+                
+                ⚠️ **AVIF Note**: Hvis AVIF filer ikke virker, prøv at installere: `pip install pillow-avif-plugin`
+                """)
+                
         
         if uploaded_files:
             st.success(f"✅ Uploadede {len(uploaded_files)} fil(er)")
