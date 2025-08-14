@@ -127,7 +127,7 @@ def convert_images(uploaded_files, output_format, quality, max_width, max_height
 
 def display_conversion_results(results):
     """Display conversion results in a table"""
-    st.subheader("📊 Konverteringsresultater")
+    st.subheader("Konverteringsresultater 📊")
     
     successful_conversions = 0
     failed_conversions = 0
@@ -154,11 +154,11 @@ def display_conversion_results(results):
     # Summary
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("✅ Succesfulde", successful_conversions)
+        st.metric("Succesfulde ✅", successful_conversions)
     with col2:
-        st.metric("❌ Fejlede", failed_conversions)
+        st.metric("Fejlede ❌", failed_conversions)
     with col3:
-        st.metric("📁 Total filer", len(results))
+        st.metric("Total filer 📁", len(results))
 
 def create_zip_file(files):
     """Create a ZIP file containing all converted images"""
@@ -190,7 +190,7 @@ def show():
     # TAB 1 - Main content area
     with tab1:
         # Main content area
-        st.header("Upload Billeder 📤 ")
+        st.header("Upload Billeder 📤")
         
         col1, col2 = st.columns(2)
         
@@ -206,7 +206,7 @@ def show():
             
             
             # Conversion settings - moved to main area
-            st.header("⚙️ Konverteringsindstillinger")
+            st.header("Konverteringsindstillinger ⚙️")
 
             # Output format selection
             output_format = st.selectbox(
@@ -243,7 +243,7 @@ def show():
             if not uploaded_files:
                 # Show format info when no files uploaded
                 st.info("""
-                **📋 Understøttede formater:**
+                **Understøttede formater 📋:**
                 - **PNG**: Standard format med gennemsigtighed support ✅
                 - **WebP**: Google's web-format med god kompression ✅
                 - **AVIF**: Moderne format med fremragende kompression (kræver system support)             
@@ -251,10 +251,10 @@ def show():
                 
         
         if uploaded_files:
-            st.success(f"✅ Uploadede {len(uploaded_files)} fil(er)")
+            st.success(f"Uploadede ✅ {len(uploaded_files)} fil(er)")
             
             # Show preview of uploaded files
-            with st.expander("👁️ Forhåndsvisning af uploadede billeder", expanded=True):
+            with st.expander("Forhåndsvisning af uploadede billeder 👁️", expanded=True):
                 # Calculate columns based on number of files
                 num_cols = min(len(uploaded_files), 4)
                 cols = st.columns(num_cols)
@@ -287,7 +287,7 @@ def show():
             st.info(settings_text)
             
             # Convert button
-            if st.button("🔄 Konverter Billeder", type="primary", use_container_width=True):
+            if st.button("Konverter Billeder 🔄", type="primary", use_container_width=True):
                 converted_files, conversion_results = convert_images(
                     uploaded_files, output_format, quality, max_width, max_height
                 )
@@ -298,7 +298,7 @@ def show():
                     
                     # Download section
                     if converted_files:
-                        st.header("💾 Download Konverterede Filer")
+                        st.header("Download Konverterede Filer 💾")
                         
                         if len(converted_files) == 1:
                             # Single file download
@@ -306,7 +306,7 @@ def show():
                             file_extension = "jpeg" if output_format == "JPEG" else "png"
                             
                             st.download_button(
-                                label=f"📥 Download {filename}",
+                                label=f"Download 📥  {filename}",
                                 data=file_data,
                                 file_name=filename,
                                 mime=f"image/{file_extension}",
@@ -319,7 +319,7 @@ def show():
                             col1, col2 = st.columns([2, 1])
                             with col1:
                                 st.download_button(
-                                    label=f"📥 Download Alle ({len(converted_files)} filer som ZIP)",
+                                    label=f"Download Alle 📥({len(converted_files)} filer som ZIP)",
                                     data=zip_data,
                                     file_name=f"konverterede_billeder_{int(time.time())}.zip",
                                     mime="application/zip",
