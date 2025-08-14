@@ -8,7 +8,7 @@ os.environ["STREAMLIT_SERVER_RUN_ON_SAVE"] = "false"
 
 # Configure Streamlit page
 st.set_page_config(
-    page_title="T&A Værktøjer",
+    page_title="T&R Værktøjer",
     page_icon="🧙‍♀️",
     layout="wide"
 )
@@ -32,7 +32,7 @@ def init_session_state():
 
 def show():
     """Display the home page"""
-    st.title("Værktøjer til Test & Analyse 🛠️ ")
+    st.title("Værktøjer til Test & Research 🛠️ ")
     
     st.markdown("""
     Her finder du forskellige værktøjer og funktioner der forhåbentlig gør dit arbejde lidt nemmere og mere effektivt.
@@ -46,35 +46,27 @@ def show():
     with col1:
         st.subheader("Billedhenter 🚚")
         st.markdown("""
-        **Funktioner:**
-        - Søg og download billeder fra ICRT database
-            - Upload Excel filer med webkoder
-            - Indtast webkoder manuelt
-            - Copy Paste webkoder direkte fra excel-ark
-        - Finder forslag til alternative billeder (fx. IC23022-0104-00 som alternativ til IC23022-0104-51)
-        - Omdøber alternative billeder inden download (fx. omdøber IC23022-0104-00 til IC23022-0104-51 så du ikk ebehøver at gøre det efter donwloadet)
-        - Download billeder som ZIP-fil
-      
+        Dette værktøj hjælper dig med at hente billeder fra ICRT databasen.
         """)
         
         st.subheader("Baggrundsfjerner 🪄")
         st.markdown("""
-        **Funktioner:**
-        - Upload billder et eller flere billeder
-        - Vælg mellem forskellige lokale KI-modeller til baggrundsfjernelse
-        - Vælg kvalitet og format på de behandlede billeder
-        - Se preview af billeder med fjernet baggrund
-        - Download billeder enkeltvis eller som ZIP-fil      
+        Dette værktøj fjerner baggrunden fra billeder ved hjælp af avanceret KI-teknologi. (OBS: det loader lidt langsom når man går ind på fanen, så vær lidt tålmodig)
         """)
         
+        st.subheader("Billedfil-converter 🖼️")
+        st.markdown("""
+        Dette værktøj konverterer AVIF, WebP og PNG filer til JPG eller PNG format
+        """)
     
     with col2:
         st.subheader("Kommende værktøjer 🔮")
         st.markdown("""
         **Værktøjer under udvikling:**
-
+        - Tekstanalyse til at genere struktureret data fra lange tekster (kan prøves men virker ikke særlig godt endnu se fanen "Tekstanalyse")
+        - PDF ekstrator til at ekstraherer billeder og tekst fra PDF filer
         """)
-        st.info("Flere værktøjer kommer snart!")
+        
     
  
    
