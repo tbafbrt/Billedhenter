@@ -15,3 +15,6 @@ google-generativeai>=0.3.0
 
 # Chatbot requirements
 openai>=1.0.0
+
+# AVIF support for image converter
+pillow-avif-plugin>=1.4.0
