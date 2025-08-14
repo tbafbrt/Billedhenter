@@ -246,9 +246,7 @@ def show():
                 **📋 Understøttede formater:**
                 - **PNG**: Standard format med gennemsigtighed support ✅
                 - **WebP**: Google's web-format med god kompression ✅
-                - **AVIF**: Moderne format med fremragende kompression (kræver system support)
-                
-                ⚠️ **AVIF Note**: Hvis AVIF filer ikke virker, prøv at installere: `pip install pillow-avif-plugin`
+                - **AVIF**: Moderne format med fremragende kompression (kræver system support)             
                 """)
                 
         
