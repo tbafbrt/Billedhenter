@@ -81,7 +81,7 @@ class ICRTImageDownloader:
         return match.group(1) if match else ""
     
     def search_images_for_codes(self, project_code: str, webkodes: List[str]) -> Dict:
-        """Search for images matching the webkodes using the proven filtering approach with prefix fallback"""
+        """Search for images matching the webkodes using the proven filtering approach"""
         results = {
             'found': {},
             'missing': [],
@@ -90,25 +90,6 @@ class ICRTImageDownloader:
         
         # Create a set of webkodes for faster lookup (convert to lowercase)
         webkode_set = {code.strip().lower() for code in webkodes}
-        
-        # Debug: Show what we're searching for
-        st.write(f"🔍 Søger efter følgende koder: {list(webkode_set)}")
-        
-        # Also create a set without prefixes for fallback search
-        webkode_without_prefix_set = set()
-        webkode_prefix_mapping = {}  # Maps code without prefix back to original code
-        
-        for code in webkodes:
-            clean_code = code.strip()
-            # Check if code starts with 2 letters followed by numbers
-            if len(clean_code) > 2 and clean_code[:2].isalpha() and clean_code[2:3].isdigit():
-                code_without_prefix = clean_code[2:]  # Remove first 2 characters
-                webkode_without_prefix_set.add(code_without_prefix.lower())
-                webkode_prefix_mapping[code_without_prefix.lower()] = clean_code
-        
-        # Debug: Show fallback codes
-        if webkode_without_prefix_set:
-            st.write(f"🔄 Fallback søgning efter koder uden præfiks: {list(webkode_without_prefix_set)}")
         
         # Build GraphQL query using variables
         query = """
@@ -133,7 +114,7 @@ class ICRTImageDownloader:
         if not success:
             # Check if JWT expired
             if response.get('error') == 'jwt_expired':
-                st.error("🔒 Din session er udløbet. Du skal logge ind igen med dine API-oplysninger.")
+                st.error("🔑 Din session er udløbet. Du skal logge ind igen med dine API-oplysninger.")
                 
                 # Clear the API authentication state to force re-login
                 st.session_state.api_authenticated = False
@@ -189,7 +170,7 @@ class ICRTImageDownloader:
                 # Extract product code
                 product_code = extract_product_code(filename)
                 
-                # Check for direct match first
+                # Check for match
                 if product_code in webkode_set:
                     found_count += 1
                     
@@ -209,23 +190,6 @@ class ICRTImageDownloader:
                             'filename': filename,
                             'webkode': original_webkode
                         })
-                
-                # Check for match without prefix (fallback search)
-                elif product_code in webkode_without_prefix_set:
-                    found_count += 1
-                    
-                    # Get the original webkode that this matches
-                    original_webkode = webkode_prefix_mapping[product_code]
-                    
-                    if original_webkode not in results['found']:
-                        results['found'][original_webkode] = []
-                    
-                    results['found'][original_webkode].append({
-                        'url': image_url,
-                        'filename': filename,
-                        'webkode': original_webkode,
-                        'match_type': 'without_prefix'  # Flag to indicate this was a prefix-less match
-                    })
         
         # Clean up progress indicators
         progress_bar.empty()
@@ -255,13 +219,13 @@ class ICRTImageDownloader:
                                 # Extract product code from filename
                                 product_code = extract_product_code(filename)
                                 
-                                # Check if this file belongs to the same base product (with or without prefix)
+                                # Check if this file belongs to the same base product
                                 if '-' in product_code:
                                     file_parts = product_code.split('-')
                                     if len(file_parts) >= 3:
                                         file_base = '-'.join(file_parts[:-1])
                                         
-                                        # Check direct match
+                                        # If same base product but different variant
                                         if file_base.lower() == base_product.lower() and product_code.lower() != clean_webkode.lower():
                                             variant_suggestions.append({
                                                 'url': media.get('image', ''),
@@ -270,19 +234,6 @@ class ICRTImageDownloader:
                                                 'original_webkode': clean_webkode,
                                                 'suggestion_reason': f"Alternative variant ({product_code}) found for missing variant ({clean_webkode})"
                                             })
-                                        
-                                        # Also check without prefix
-                                        elif len(clean_webkode) > 2 and clean_webkode[:2].isalpha():
-                                            base_without_prefix = base_product[2:] if len(base_product) > 2 and base_product[:2].isalpha() else base_product
-                                            if file_base.lower() == base_without_prefix.lower() and product_code.lower() != clean_webkode.lower():
-                                                variant_suggestions.append({
-                                                    'url': media.get('image', ''),
-                                                    'filename': filename,
-                                                    'webkode': product_code,
-                                                    'original_webkode': clean_webkode,
-                                                    'suggestion_reason': f"Alternative variant without prefix ({product_code}) found for missing variant ({clean_webkode})",
-                                                    'match_type': 'without_prefix'  # Add this flag for suggestions too
-                                                })
                         
                         # Add suggestions to results
                         if variant_suggestions:

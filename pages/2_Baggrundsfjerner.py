@@ -17,7 +17,7 @@ os.environ["STREAMLIT_SERVER_RUN_ON_SAVE"] = "false"
 # Configure Streamlit page
 st.set_page_config(
     page_title="Baggrundsfjerner",
-    page_icon="🖼️",
+    page_icon="🧼",
     layout="wide"
 )
 
@@ -170,7 +170,7 @@ def process_batch_images(uploaded_files, model_name="isnet-general-use"):
 
 def show():
     """Display the background remover page"""
-    st.title("Baggrundsfjerner 🪄")
+    st.title("Baggrundsfjerner 🧼")
     
     st.markdown("""
     Fjern baggrunden fra dine billeder automatisk! Upload et eller flere billeder og få dem processet med KI.
@@ -230,7 +230,7 @@ def show():
         with col1:
             # Model selection
             selected_model_name = st.selectbox(
-                "🤖 KI Model",
+                "KI Model 🤖 ",
                 options=list(model_options.keys()),
                 index=3,  # This selects "Høj kvalitet (isnet-general-use)" as default
                 help="Vælg KI model baseret på dit billedtype"
@@ -239,7 +239,7 @@ def show():
             
             # Background color
             background_choice = st.selectbox(
-                "🎨 Baggrund",
+                "Baggrund 🎨 ",
                 options=list(background_options.keys()),
                 help="Vælg baggrundsfarve (gennemsigtig kun for PNG)"
             )
@@ -255,7 +255,7 @@ def show():
         with col2:
             # Output format
             output_format_name = st.selectbox(
-                "📁 Format",
+                "Format 📁 ",
                 options=list(format_options.keys()),
                 help="JPG er mindre filer, PNG bevarer gennemsigtighed"
             )
@@ -264,7 +264,7 @@ def show():
             # Quality (only for JPEG)
             if output_format == "JPEG":
                 quality_name = st.selectbox(
-                    "📊 Kvalitet",
+                    "Kvalitet 📊 ",
                     options=list(quality_options.keys()),
                     help="Højere kvalitet giver større filer"
                 )
@@ -288,7 +288,7 @@ def show():
             st.warning("⚠️ JPG format understøtter ikke gennemsigtighed. Skift til PNG eller vælg en baggrundsfave.")
         
         if uploaded_files:
-            st.header("🔄 Behandling")
+            st.header("Behandling 🔄 ")
             
             # Show upload summary
             total_size = sum(f.size for f in uploaded_files)

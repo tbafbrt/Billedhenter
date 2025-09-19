@@ -28,8 +28,8 @@ os.environ["STREAMLIT_SERVER_RUN_ON_SAVE"] = "false"
 
 # Configure Streamlit page
 st.set_page_config(
-    page_title="T&A Værktøjer - TænkGPT Chatbot",
-    page_icon="🤖",
+    page_title="T&R Værktøjer - TænkGPT Chatbot",
+    page_icon="💬",
     layout="wide"
 )
 
@@ -106,7 +106,7 @@ def get_available_models():
 
 def show():
     """Display the chatbot page"""
-    st.title("T&A TænkGPT Chatbot 🤖")
+    st.title("T&R TænkGPT Chatbot 💬")
     
     help_text = '''
     Det er din nye chatbot!

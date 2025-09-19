@@ -8,7 +8,7 @@ os.environ["STREAMLIT_SERVER_RUN_ON_SAVE"] = "false"
 
 # Configure Streamlit page
 st.set_page_config(
-    page_title="T&R Værktøjer",
+    page_title="T&R Apps",
     page_icon="🧙‍♀️",
     layout="wide"
 )
@@ -49,15 +49,21 @@ def show():
         Dette værktøj hjælper dig med at hente billeder fra ICRT databasen.
         """)
         
-        st.subheader("Baggrundsfjerner 🪄")
+        st.subheader("Baggrundsfjerner 🧼")
         st.markdown("""
         Dette værktøj fjerner baggrunden fra billeder ved hjælp af avanceret KI-teknologi. (OBS: det loader lidt langsom når man går ind på fanen, så vær lidt tålmodig)
         """)
         
-        st.subheader("Billedfil-converter 🖼️")
+        st.subheader("Billedfil-converter 🔄")
         st.markdown("""
         Dette værktøj konverterer AVIF, WebP og PNG filer til JPG eller PNG format
         """)
+        
+        st.subheader("T&R TænkGPT Chatbot 💬")
+        st.markdown("""
+        På denne side kan du chatte med 11 forskellige sprogmodeller fra OpenAI, Anthropic og Mistral.
+        """)
+        
     
     with col2:
         st.subheader("Kommende værktøjer 🔮")
@@ -72,7 +78,7 @@ def show():
    
     # Footer
     st.markdown("---")
-    st.caption("T&A værktøjer")
+    st.caption("T&R værktøjer")
 
 # Main execution
 init_session_state()

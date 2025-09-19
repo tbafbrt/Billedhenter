@@ -110,47 +110,12 @@ def create_suggested_filename(original_filename, searched_webkode, rename_altern
     
     return new_filename
 
-def add_prefix_to_filename(original_filename, searched_webkode):
-    """Add prefix to filename if it was found without prefix"""
-    # Extract prefix from searched webkode (first 2 characters if they are letters)
-    if len(searched_webkode) > 2 and searched_webkode[:2].isalpha():
-        prefix = searched_webkode[:2].upper()
-        
-        # Get file extension first
-        if '.' in original_filename:
-            filename_without_ext, file_extension = original_filename.rsplit('.', 1)
-        else:
-            filename_without_ext = original_filename
-            file_extension = ""
-        
-        # Check if filename already starts with the prefix (case insensitive)
-        if not filename_without_ext.upper().startswith(prefix.upper()):
-            # Add prefix to the filename
-            new_filename_base = f"{prefix}{filename_without_ext}"
-        else:
-            # Already has prefix, return as is
-            new_filename_base = filename_without_ext
-        
-        # Reconstruct with extension
-        if file_extension:
-            return f"{new_filename_base}.{file_extension}"
-        else:
-            return new_filename_base
-    
-    # If no valid prefix found, return original filename
-    return original_filename
-
 def show():
     """Display the billedhenter page"""
     st.title("T&A Billedhenter 🚚")
     st.write("""Her kan du hente billeder fra ICRT databasen ved at indsætte webkoder eller uploade et prisark.  
         Du kan også vælge at omdøbe alternative billeder inden download, så du slipper for at gøre det manuelt bagefter.
     """)
-    
-    # Initialize all settings variables at the top to avoid scope issues
-    rename_alternatives = False
-    add_suggested_suffix = False
-    add_prefix_to_no_prefix = False
     
     # Initialize downloader
     downloader = ICRTImageDownloader()
@@ -376,26 +341,12 @@ def show():
                         else:
                             display_name = f"📷 {image['filename']}"
                         
-                        # Add indicator if found without prefix
-                        if image.get('match_type') == 'without_prefix':
-                            display_name += " 🔍"
-                            
-                            # Show preview if prefix will be added
-                            if add_prefix_to_no_prefix:
-                                preview_name = add_prefix_to_filename(image['filename'], webkode)
-                                display_name += f" → {preview_name}"
-                                help_text = f"Fundet uden præfiks - vil blive omdøbt til {preview_name}"
-                            else:
-                                help_text = f"Fundet uden præfiks - {image['filename']} matcher {webkode} uden de første to bogstaver"
-                        else:
-                            help_text = "Duplikat billede fundet" if is_duplicate else None
-                        
                         # Display checkbox
                         selected = st.checkbox(
                             display_name,
                             key=key,
                             value=key in st.session_state.selected_images,
-                            help=help_text
+                            help="Duplikat billede fundet" if is_duplicate else None
                         )
                         
                         # Update selection state
@@ -404,17 +355,32 @@ def show():
                         elif key in st.session_state.selected_images:
                             st.session_state.selected_images.remove(key)
                 
+                # Add rename options for alternatives - UPDATED VERSION
+                st.subheader("⚙️ Indstillinger")
+                col1, col2 = st.columns(2)
 
+                with col1:
+                    rename_alternatives = st.checkbox(
+                        "📝 Omdøb alternative filer til det ønskede variant-nummer",
+                        help="Eksempel: IT22828-0029-00_01.jpg → IT22828-0029-50_01.jpg hvis du søgte efter IT22828-0029-50"
+                    )
+
+                with col2:
+                    add_suggested_suffix = st.checkbox(
+                        "🏷️ Tilføj '_suggested' til alternative filer",
+                        help="Eksempel: IT22828-0029-50_01.jpg → IT22828-0029-50_01_suggested.jpg"
+                    )
+                
                 # Display missing codes with suggestions
                 if results['missing']:
-                    st.subheader("Foreslåede alternativer for manglende billeder")
+                    st.subheader("💡 Foreslåede alternativer for manglende billeder")
                     
                     for webkode in sorted_missing:
                         if webkode in results.get('suggestions', {}):
                             # Show missing code with suggestions
                             st.write(f"🔍 **{webkode}** - Intet direkte match fundet")
                             suggestions = results['suggestions'][webkode]
-                            st.write(f"➡️ **Fundet {len(suggestions)} alternativer:**")
+                            st.write(f"💡 **Fundet {len(suggestions)} alternativer:**")
                             
                             # Find keys for this webkode's suggestions from registry
                             suggestion_keys = [key for key, data in keys_registry.items() 
@@ -434,28 +400,24 @@ def show():
                                     add_suggested_suffix
                                 )
                                 
-                                # Add prefix preview if needed and it's a suggestion found without prefix
-                                if add_prefix_to_no_prefix and suggestion.get('match_type') == 'without_prefix':
-                                    preview_name = add_prefix_to_filename(preview_name, webkode)
-                                
                                 # Create display name with preview
                                 if is_duplicate:
                                     duplicate_suffix = f" (kopi #{duplicate_number})"
                                     if rename_alternatives or add_suggested_suffix:
-                                        display_name = f"🔄 {suggestion['filename']} → {preview_name}{duplicate_suffix}"
+                                        display_name = f"📸 {suggestion['filename']} → {preview_name}{duplicate_suffix}"
                                     else:
-                                        display_name = f"🔄 {suggestion['filename']}{duplicate_suffix}"
+                                        display_name = f"📸 {suggestion['filename']}{duplicate_suffix}"
                                 else:
                                     if rename_alternatives or add_suggested_suffix:
-                                        display_name = f"🔄 {suggestion['filename']} → {preview_name}"
+                                        display_name = f"📸 {suggestion['filename']} → {preview_name}"
                                     else:
-                                        display_name = f"🔄 {suggestion['filename']}"
+                                        display_name = f"📸 {suggestion['filename']}"
                                 
                                 # Show which webkode it's from
                                 display_name += f" (fra {suggestion['webkode']})"
                                 
                                 help_text = suggestion['suggestion_reason']
-                                if rename_alternatives or add_suggested_suffix or (add_prefix_to_no_prefix and suggestion.get('match_type') == 'without_prefix'):
+                                if rename_alternatives or add_suggested_suffix:
                                     help_text += f" - Vil blive omdøbt til {preview_name}"
                                 
                                 # Display checkbox
@@ -474,11 +436,11 @@ def show():
                         else:
                             # No suggestions available
                             st.write(f"• **{webkode}** - Ingen alternativer fundet")
-                            
-                # Update settings variables with checkbox values
-                st.subheader("⚙️ Indstillinger")
-                col1, col2, col3, col4 = st.columns(spec=[1, 1, 2, 3], gap="small")
-                           
+                
+                # Batch selection controls - now using the registry for consistency
+                st.subheader("🎛️ Vælg flere ad gangen")
+                col1, col2, col3, col4 = st.columns(4)
+                
                 with col1:
                     if st.button("✅ Vælg alle inkl. forslag"):
                         # Clear existing selections and select all using registry keys
@@ -488,14 +450,9 @@ def show():
                         for key in keys_registry.keys():
                             st.session_state.selected_images.add(key)
                         
-                        st.rerun()    
-                                
-                    if st.button("❌ Fravælg alle"):
-                        st.session_state.selected_images.clear()
                         st.rerun()
                 
                 with col2:
-                    
                     if st.button("🎯 Vælg kun hele matches"):
                         # Clear existing selections and select only exact matches using registry
                         st.session_state.selected_images.clear()
@@ -506,7 +463,8 @@ def show():
                                 st.session_state.selected_images.add(key)
                         
                         st.rerun()
-                    
+                
+                with col3:
                     if st.button("📄 Fravælg dubletter"):
                         # Remove duplicates from selection (keep only copy #1 of each duplicate)
                         keys_to_remove = set()
@@ -522,26 +480,11 @@ def show():
                         
                         st.rerun()
                 
-                with col3:                
-                    rename_alternatives = st.checkbox(
-                        "📝 Omdøb alternative filer til det ønskede variant-nummer",
-                        help="Eksempel: IT22828-0029-00_01.jpg → IT22828-0029-50_01.jpg hvis du søgte efter IT22828-0029-50"
-                    )
-                
-                    add_suggested_suffix = st.checkbox(
-                        "🏷️ Tilføj '_suggested' til alternative filer",
-                        help="Eksempel: IT22828-0029-50_01.jpg → IT22828-0029-50_01_suggested.jpg"
-                    )
-            
-                    add_prefix_to_no_prefix = st.checkbox(
-                        "🔤 Tilføj præfiks til filer fundet uden præfiks",
-                        help="Eksempel: 21776-0375-00_001.jpg → IC21776-0375-00_001.jpg"
-                    )
-                
                 with col4:
-                    # Empty column for spacing
-                    "" 
-                                    
+                    if st.button("❌ Fravælg alle"):
+                        st.session_state.selected_images.clear()
+                        st.rerun()
+                
                 # Download section - count selected images (including suggestions)
                 all_selected_keys = st.session_state.selected_images
                 selected_count = len(all_selected_keys)
@@ -580,7 +523,7 @@ def show():
                         
                         st.info(f"{zip_color} **ZIP størrelse**: {zip_size_estimate} (~{selected_count * 0.2:.1f}MB estimeret)")
                     
-                    if selected_count <= MAX_IMAGES_PER_ZIP and st.button("📦 Pak ZIP fil", type="primary"):
+                    if selected_count <= MAX_IMAGES_PER_ZIP and st.button("📦 Pak og download ZIP fil", type="primary"):
                         selected_images = []
                         
                         # Use the registry to build selected images list
@@ -595,11 +538,6 @@ def show():
                                 if data['type'] == 'found':
                                     # Handle duplicate filenames for found images
                                     original_filename = image['filename']
-                                    
-                                    # Add prefix if requested and image was found without prefix
-                                    if add_prefix_to_no_prefix and image.get('match_type') == 'without_prefix':
-                                        original_filename = add_prefix_to_filename(original_filename, webkode)
-                                    
                                     if original_filename in duplicate_counter:
                                         duplicate_counter[original_filename] += 1
                                         final_filename = f"{original_filename}_kopi{duplicate_counter[original_filename]}"
@@ -620,10 +558,6 @@ def show():
                                         rename_alternatives, 
                                         add_suggested_suffix
                                     )
-                                    
-                                    # Add prefix if requested and this suggestion was found without prefix
-                                    if add_prefix_to_no_prefix and image.get('match_type') == 'without_prefix':
-                                        new_filename = add_prefix_to_filename(new_filename, webkode)
                                     
                                     # Handle duplicates for suggestions too
                                     if new_filename in duplicate_counter:
@@ -647,7 +581,7 @@ def show():
                             zip_data = create_download_zip(selected_images)
                             
                             st.download_button(
-                                label="💾 Download ZIP fil",
+                                label="💾 Klik her hvis download ikke starter automatisk",
                                 data=zip_data,
                                 file_name=f"icrt_images_{project_code_input}_{int(time.time())}.zip",
                                 mime="application/zip",

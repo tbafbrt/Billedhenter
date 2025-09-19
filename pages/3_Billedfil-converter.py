@@ -13,8 +13,8 @@ os.environ["STREAMLIT_SERVER_RUN_ON_SAVE"] = "false"
 
 # Configure Streamlit page
 st.set_page_config(
-    page_title="T&A Værktøjer - Billedfil-converter",
-    page_icon="🖼️",
+    page_title="T&R Værktøjer - Billedfil-converter",
+    page_icon="🔄",
     layout="wide"
 )
 
@@ -173,7 +173,7 @@ def create_zip_file(files):
 
 def show():
     """Display the image converter page"""
-    st.title("T&A Billedfil-converter 🖼️")
+    st.title("T&R Billedfil-converter 🔄")
     
     st.markdown("""
     **Konverter AVIF, WebP og PNG billeder til JPG eller PNG format**

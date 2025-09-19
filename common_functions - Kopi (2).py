@@ -280,8 +280,7 @@ class ICRTImageDownloader:
                                                     'filename': filename,
                                                     'webkode': product_code,
                                                     'original_webkode': clean_webkode,
-                                                    'suggestion_reason': f"Alternative variant without prefix ({product_code}) found for missing variant ({clean_webkode})",
-                                                    'match_type': 'without_prefix'  # Add this flag for suggestions too
+                                                    'suggestion_reason': f"Alternative variant without prefix ({product_code}) found for missing variant ({clean_webkode})"
                                                 })
                         
                         # Add suggestions to results
