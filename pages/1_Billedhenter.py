@@ -477,7 +477,7 @@ def show():
                             
                 # Update settings variables with checkbox values
                 st.subheader("⚙️ Indstillinger")
-                col1, col2, col3, col4 = st.columns(spec=[1, 1, 2, 3], gap="small")
+                col1, col2, col3, col4 = st.columns(spec=[1, 1, 2, 3], gap="large")
                            
                 with col1:
                     if st.button("✅ Vælg alle inkl. forslag"):
