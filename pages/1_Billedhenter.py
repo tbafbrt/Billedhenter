@@ -32,7 +32,7 @@ def init_session_state():
         'selected_images': set(),
         'image_keys_registry': {},
         'current_page': 'billedhenter',
-        'force_rerun': False  # Add this to force checkbox updates
+        'pending_action': None  # Track pending button actions
     }
     
     for key, default_value in defaults.items():
@@ -351,6 +351,30 @@ def show():
                 # Store registry in session state
                 st.session_state.image_keys_registry = keys_registry
                 
+                # Handle pending actions from previous button clicks
+                if st.session_state.pending_action == 'select_all':
+                    st.session_state.selected_images = set(keys_registry.keys())
+                    st.session_state.pending_action = None
+                
+                elif st.session_state.pending_action == 'deselect_all':
+                    st.session_state.selected_images = set()
+                    st.session_state.pending_action = None
+                
+                elif st.session_state.pending_action == 'select_exact':
+                    st.session_state.selected_images = {
+                        key for key, data in keys_registry.items() 
+                        if data['type'] == 'found'
+                    }
+                    st.session_state.pending_action = None
+                
+                elif st.session_state.pending_action == 'deselect_dupes':
+                    keys_to_keep = {
+                        key for key, data in keys_registry.items()
+                        if not data['is_duplicate'] or data['duplicate_number'] == 1
+                    }
+                    st.session_state.selected_images = st.session_state.selected_images & keys_to_keep
+                    st.session_state.pending_action = None
+                
                 # Settings section - MOVED HERE BEFORE DISPLAY
                 st.subheader("⚙️ Indstillinger")
                 
@@ -498,44 +522,24 @@ def show():
                 col1, col2, col3, col4 = st.columns(4)
                            
                 with col1:
-                    select_all_clicked = st.button("✅ Vælg alle inkl. forslag", key="btn_select_all")
+                    if st.button("✅ Vælg alle inkl. forslag", key="btn_select_all"):
+                        st.session_state.pending_action = 'select_all'
+                        st.rerun()
                 
                 with col2:
-                    select_exact_clicked = st.button("🎯 Vælg kun hele matches", key="btn_select_exact")
+                    if st.button("🎯 Vælg kun hele matches", key="btn_select_exact"):
+                        st.session_state.pending_action = 'select_exact'
+                        st.rerun()
                 
                 with col3:
-                    deselect_dupes_clicked = st.button("📄 Fravælg dubletter", key="btn_deselect_dupes")
+                    if st.button("📄 Fravælg dubletter", key="btn_deselect_dupes"):
+                        st.session_state.pending_action = 'deselect_dupes'
+                        st.rerun()
                 
                 with col4:
-                    deselect_all_clicked = st.button("❌ Fravælg alle", key="btn_deselect_all")
-                
-                # Handle button clicks AFTER all buttons are rendered
-                if select_all_clicked:
-                    # Select all keys from registry
-                    st.session_state.selected_images = set(keys_registry.keys())
-                    st.rerun()
-                
-                if deselect_all_clicked:
-                    st.session_state.selected_images = set()
-                    st.rerun()
-                
-                if select_exact_clicked:
-                    # Select only found images (no suggestions)
-                    st.session_state.selected_images = {
-                        key for key, data in keys_registry.items() 
-                        if data['type'] == 'found'
-                    }
-                    st.rerun()
-                
-                if deselect_dupes_clicked:
-                    # Remove duplicates from selection (keep only copy #1 of each duplicate)
-                    keys_to_keep = {
-                        key for key, data in keys_registry.items()
-                        if not data['is_duplicate'] or data['duplicate_number'] == 1
-                    }
-                    # Only keep selected keys that should be kept
-                    st.session_state.selected_images = st.session_state.selected_images & keys_to_keep
-                    st.rerun()
+                    if st.button("❌ Fravælg alle", key="btn_deselect_all"):
+                        st.session_state.pending_action = 'deselect_all'
+                        st.rerun()
                                     
                 # Download section - count selected images (including suggestions)
                 all_selected_keys = st.session_state.selected_images
@@ -545,7 +549,7 @@ def show():
                     st.header(f"⬇️ Hent valgte billeder ({selected_count})")
                     
                     # Check if too many images are selected
-                    MAX_IMAGES_PER_ZIP = 1300
+                    MAX_IMAGES_PER_ZIP = 300
                     
                     if selected_count > MAX_IMAGES_PER_ZIP:
                         st.error(f"⚠️ **For mange billeder valgt!**")
