@@ -31,13 +31,39 @@ def init_session_state():
         'search_results': {},
         'selected_images': set(),
         'image_keys_registry': {},
-        'current_page': 'billedhenter',
-        'pending_action': None  # Track pending button actions
+        'current_page': 'billedhenter'
     }
     
     for key, default_value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = default_value
+
+# Callback functions for batch selection buttons
+def select_all_callback():
+    """Select all images including suggestions"""
+    if st.session_state.image_keys_registry:
+        st.session_state.selected_images = set(st.session_state.image_keys_registry.keys())
+
+def deselect_all_callback():
+    """Deselect all images"""
+    st.session_state.selected_images = set()
+
+def select_exact_callback():
+    """Select only exact matches (no suggestions)"""
+    if st.session_state.image_keys_registry:
+        st.session_state.selected_images = {
+            key for key, data in st.session_state.image_keys_registry.items() 
+            if data['type'] == 'found'
+        }
+
+def deselect_dupes_callback():
+    """Deselect duplicate images (keep only copy #1)"""
+    if st.session_state.image_keys_registry:
+        keys_to_keep = {
+            key for key, data in st.session_state.image_keys_registry.items()
+            if not data['is_duplicate'] or data['duplicate_number'] == 1
+        }
+        st.session_state.selected_images = st.session_state.selected_images & keys_to_keep
 
 def create_suggested_filename(original_filename, searched_webkode, rename_alternatives, add_suggested_suffix):
     """Create filename for suggested images with improved logic"""
@@ -348,32 +374,8 @@ def show():
                                     'duplicate_number': suggestion_filename_occurrence[filename] if suggestion_filename_counts[filename] > 1 else None
                                 }
                 
-                # Store registry in session state
+                # Store registry in session state - THIS IS CRITICAL
                 st.session_state.image_keys_registry = keys_registry
-                
-                # Handle pending actions from previous button clicks
-                if st.session_state.pending_action == 'select_all':
-                    st.session_state.selected_images = set(keys_registry.keys())
-                    st.session_state.pending_action = None
-                
-                elif st.session_state.pending_action == 'deselect_all':
-                    st.session_state.selected_images = set()
-                    st.session_state.pending_action = None
-                
-                elif st.session_state.pending_action == 'select_exact':
-                    st.session_state.selected_images = {
-                        key for key, data in keys_registry.items() 
-                        if data['type'] == 'found'
-                    }
-                    st.session_state.pending_action = None
-                
-                elif st.session_state.pending_action == 'deselect_dupes':
-                    keys_to_keep = {
-                        key for key, data in keys_registry.items()
-                        if not data['is_duplicate'] or data['duplicate_number'] == 1
-                    }
-                    st.session_state.selected_images = st.session_state.selected_images & keys_to_keep
-                    st.session_state.pending_action = None
                 
                 # Settings section - MOVED HERE BEFORE DISPLAY
                 st.subheader("⚙️ Indstillinger")
@@ -517,29 +519,41 @@ def show():
                             # No suggestions available
                             st.write(f"• **{webkode}** - Ingen alternativer fundet")
                             
-                # Batch selection buttons
+                # Batch selection buttons - Using on_click callbacks
                 st.subheader("🎛️ Batch-valg")
                 col1, col2, col3, col4 = st.columns(4)
                            
                 with col1:
-                    if st.button("✅ Vælg alle inkl. forslag", key="btn_select_all"):
-                        st.session_state.pending_action = 'select_all'
-                        st.rerun()
+                    st.button(
+                        "✅ Vælg alle inkl. forslag", 
+                        key="btn_select_all",
+                        on_click=select_all_callback,
+                        use_container_width=True
+                    )
                 
                 with col2:
-                    if st.button("🎯 Vælg kun hele matches", key="btn_select_exact"):
-                        st.session_state.pending_action = 'select_exact'
-                        st.rerun()
+                    st.button(
+                        "🎯 Vælg kun hele matches", 
+                        key="btn_select_exact",
+                        on_click=select_exact_callback,
+                        use_container_width=True
+                    )
                 
                 with col3:
-                    if st.button("📄 Fravælg dubletter", key="btn_deselect_dupes"):
-                        st.session_state.pending_action = 'deselect_dupes'
-                        st.rerun()
+                    st.button(
+                        "📄 Fravælg dubletter", 
+                        key="btn_deselect_dupes",
+                        on_click=deselect_dupes_callback,
+                        use_container_width=True
+                    )
                 
                 with col4:
-                    if st.button("❌ Fravælg alle", key="btn_deselect_all"):
-                        st.session_state.pending_action = 'deselect_all'
-                        st.rerun()
+                    st.button(
+                        "❌ Fravælg alle", 
+                        key="btn_deselect_all",
+                        on_click=deselect_all_callback,
+                        use_container_width=True
+                    )
                                     
                 # Download section - count selected images (including suggestions)
                 all_selected_keys = st.session_state.selected_images
