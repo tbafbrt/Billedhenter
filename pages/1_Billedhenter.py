@@ -40,44 +40,7 @@ def init_session_state():
         if key not in st.session_state:
             st.session_state[key] = default_value
 
-# Callback functions for batch selection buttons
-def select_all_callback():
-    """Select all images including suggestions"""
-    if st.session_state.image_keys_registry:
-        st.session_state.selected_images = set(st.session_state.image_keys_registry.keys())
-        st.session_state.debug_message = f"✅ DEBUG: Valgt {len(st.session_state.selected_images)} billeder (Vælg alle)"
-        st.session_state.last_action = f"select_all - {len(st.session_state.selected_images)} images"
-
-def deselect_all_callback():
-    """Deselect all images"""
-    st.session_state.selected_images = set()
-    st.session_state.debug_message = f"❌ DEBUG: Fravalgt alle billeder"
-    st.session_state.last_action = "deselect_all"
-
-def select_exact_callback():
-    """Select only exact matches (no suggestions)"""
-    if st.session_state.image_keys_registry:
-        exact_matches = {
-            key for key, data in st.session_state.image_keys_registry.items() 
-            if data['type'] == 'found'
-        }
-        st.session_state.selected_images = exact_matches
-        st.session_state.debug_message = f"🎯 DEBUG: Valgt {len(exact_matches)} hele matches"
-        st.session_state.last_action = f"select_exact - {len(exact_matches)} images"
-
-def deselect_dupes_callback():
-    """Deselect duplicate images (keep only copy #1)"""
-    if st.session_state.image_keys_registry:
-        keys_to_keep = {
-            key for key, data in st.session_state.image_keys_registry.items()
-            if not data['is_duplicate'] or data['duplicate_number'] == 1
-        }
-        before_count = len(st.session_state.selected_images)
-        st.session_state.selected_images = st.session_state.selected_images & keys_to_keep
-        after_count = len(st.session_state.selected_images)
-        removed = before_count - after_count
-        st.session_state.debug_message = f"📄 DEBUG: Fjernet {removed} dubletter (før: {before_count}, efter: {after_count})"
-        st.session_state.last_action = f"deselect_dupes - removed {removed}"
+# No callback functions needed - we'll use button click detection instead
 
 def create_suggested_filename(original_filename, searched_webkode, rename_alternatives, add_suggested_suffix):
     """Create filename for suggested images with improved logic"""
@@ -543,41 +506,48 @@ def show():
                             # No suggestions available
                             st.write(f"• **{webkode}** - Ingen alternativer fundet")
                             
-                # Batch selection buttons - Using on_click callbacks
+                # Batch selection buttons - Using simple button detection
                 st.subheader("🎛️ Batch-valg")
                 col1, col2, col3, col4 = st.columns(4)
                            
                 with col1:
-                    st.button(
-                        "✅ Vælg alle inkl. forslag", 
-                        key="btn_select_all",
-                        on_click=select_all_callback,
-                        use_container_width=True
-                    )
+                    if st.button("✅ Vælg alle inkl. forslag", key="btn_select_all", use_container_width=True):
+                        st.session_state.selected_images = set(keys_registry.keys())
+                        st.session_state.debug_message = f"✅ DEBUG: Valgt {len(st.session_state.selected_images)} billeder (Vælg alle)"
+                        st.session_state.last_action = f"select_all - {len(st.session_state.selected_images)} images"
+                        st.rerun()
                 
                 with col2:
-                    st.button(
-                        "🎯 Vælg kun hele matches", 
-                        key="btn_select_exact",
-                        on_click=select_exact_callback,
-                        use_container_width=True
-                    )
+                    if st.button("🎯 Vælg kun hele matches", key="btn_select_exact", use_container_width=True):
+                        exact_matches = {
+                            key for key, data in keys_registry.items() 
+                            if data['type'] == 'found'
+                        }
+                        st.session_state.selected_images = exact_matches
+                        st.session_state.debug_message = f"🎯 DEBUG: Valgt {len(exact_matches)} hele matches"
+                        st.session_state.last_action = f"select_exact - {len(exact_matches)} images"
+                        st.rerun()
                 
                 with col3:
-                    st.button(
-                        "📄 Fravælg dubletter", 
-                        key="btn_deselect_dupes",
-                        on_click=deselect_dupes_callback,
-                        use_container_width=True
-                    )
+                    if st.button("📄 Fravælg dubletter", key="btn_deselect_dupes", use_container_width=True):
+                        keys_to_keep = {
+                            key for key, data in keys_registry.items()
+                            if not data['is_duplicate'] or data['duplicate_number'] == 1
+                        }
+                        before_count = len(st.session_state.selected_images)
+                        st.session_state.selected_images = st.session_state.selected_images & keys_to_keep
+                        after_count = len(st.session_state.selected_images)
+                        removed = before_count - after_count
+                        st.session_state.debug_message = f"📄 DEBUG: Fjernet {removed} dubletter (før: {before_count}, efter: {after_count})"
+                        st.session_state.last_action = f"deselect_dupes - removed {removed}"
+                        st.rerun()
                 
                 with col4:
-                    st.button(
-                        "❌ Fravælg alle", 
-                        key="btn_deselect_all",
-                        on_click=deselect_all_callback,
-                        use_container_width=True
-                    )
+                    if st.button("❌ Fravælg alle", key="btn_deselect_all", use_container_width=True):
+                        st.session_state.selected_images = set()
+                        st.session_state.debug_message = f"❌ DEBUG: Fravalgt alle billeder"
+                        st.session_state.last_action = "deselect_all"
+                        st.rerun()
                                     
                 # Download section - count selected images (including suggestions)
                 all_selected_keys = st.session_state.selected_images
