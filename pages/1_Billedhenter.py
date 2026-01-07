@@ -31,7 +31,8 @@ def init_session_state():
         'search_results': {},
         'selected_images': set(),
         'image_keys_registry': {},
-        'current_page': 'billedhenter'
+        'current_page': 'billedhenter',
+        'force_rerun': False  # Add this to force checkbox updates
     }
     
     for key, default_value in defaults.items():
@@ -50,7 +51,7 @@ def create_suggested_filename(original_filename, searched_webkode, rename_altern
         if '-' in searched_webkode:
             searched_parts = searched_webkode.split('-')
             if len(searched_parts) >= 3:
-                desired_variant = searched_parts[-1]  # e.g., "50"
+                desired_variant = searched_parts[-1]  # e.g., "53"
                 
                 # Get file extension first
                 if '.' in original_filename:
@@ -61,16 +62,16 @@ def create_suggested_filename(original_filename, searched_webkode, rename_altern
                 
                 # Handle different filename patterns
                 if '_' in filename_without_ext:
-                    # Split by underscore: "IT22828-0050-00_01" -> ["IT22828-0050-00", "01"]
+                    # Split by underscore: "IC24010-0006-00_10" -> ["IC24010-0006-00", "10"]
                     parts_split = filename_without_ext.split('_')
-                    base_part = parts_split[0]  # "IT22828-0050-00"
-                    suffix_parts = parts_split[1:]  # ["01"] or ["more", "parts"]
+                    base_part = parts_split[0]  # "IC24010-0006-00"
+                    suffix_parts = parts_split[1:]  # ["10"] or ["more", "parts"]
                     
                     # Replace variant in the base webkode
                     if '-' in base_part and len(base_part.split('-')) >= 3:
                         base_components = base_part.split('-')
-                        base_components[-1] = desired_variant  # Replace "00" with "50"
-                        new_base = '-'.join(base_components)  # "IT22828-0050-50"
+                        base_components[-1] = desired_variant  # Replace "00" with "53"
+                        new_base = '-'.join(base_components)  # "IC24010-0006-53"
                         
                         # Reconstruct filename with suffix parts
                         new_filename_base = new_base + '_' + '_'.join(suffix_parts)
@@ -79,7 +80,7 @@ def create_suggested_filename(original_filename, searched_webkode, rename_altern
                         new_filename_base = searched_webkode + '_' + '_'.join(suffix_parts)
                 else:
                     # No underscore - filename is just the webkode
-                    # Direct replacement of variant: "IT22828-0055-00" -> "IT22828-0055-20"
+                    # Direct replacement of variant: "IC24010-0006-00" -> "IC24010-0006-53"
                     if '-' in filename_without_ext and len(filename_without_ext.split('-')) >= 3:
                         name_parts = filename_without_ext.split('-')
                         name_parts[-1] = desired_variant  # Replace last part with desired variant
@@ -146,11 +147,6 @@ def show():
     st.write("""Her kan du hente billeder fra ICRT databasen ved at indsætte webkoder eller uploade et prisark.  
         Du kan også vælge at omdøbe alternative billeder inden download, så du slipper for at gøre det manuelt bagefter.
     """)
-    
-    # Initialize all settings variables at the top to avoid scope issues
-    rename_alternatives = False
-    add_suggested_suffix = False
-    add_prefix_to_no_prefix = False
     
     # Initialize downloader
     downloader = ICRTImageDownloader()
@@ -245,6 +241,8 @@ def show():
                 st.session_state.search_results = results
                 # Clear the keys registry when new search is performed
                 st.session_state.image_keys_registry = {}
+                # Clear selections on new search
+                st.session_state.selected_images = set()
         
         # Display search results
         if st.session_state.search_results:
@@ -353,6 +351,28 @@ def show():
                 # Store registry in session state
                 st.session_state.image_keys_registry = keys_registry
                 
+                # Settings section - MOVED HERE BEFORE DISPLAY
+                st.subheader("⚙️ Indstillinger")
+                
+                # Always rename alternatives (removed checkbox)
+                rename_alternatives = True
+                
+                col_settings1, col_settings2 = st.columns(2)
+                
+                with col_settings1:
+                    add_suggested_suffix = st.checkbox(
+                        "🏷️ Tilføj '_suggested' til alternative filer",
+                        help="Eksempel: IC24010-0006-53_10.jpg → IC24010-0006-53_10_suggested.jpg"
+                    )
+                
+                with col_settings2:
+                    add_prefix_to_no_prefix = st.checkbox(
+                        "🔤 Tilføj præfiks til filer fundet uden præfiks",
+                        help="Eksempel: 21776-0375-00_001.jpg → IC21776-0375-00_001.jpg"
+                    )
+                
+                st.markdown("---")
+                
                 # Now display the images using the registry
                 for webkode, images in sorted_found_items:
                     sorted_images = sorted(images, key=lambda x: x['filename'])
@@ -438,24 +458,22 @@ def show():
                                 if add_prefix_to_no_prefix and suggestion.get('match_type') == 'without_prefix':
                                     preview_name = add_prefix_to_filename(preview_name, webkode)
                                 
-                                # Create display name with preview
+                                # Get the original filename to show where it's from
+                                original_filename = suggestion['filename']
+                                
+                                # Create display name with preview - ALWAYS show the renamed version
                                 if is_duplicate:
                                     duplicate_suffix = f" (kopi #{duplicate_number})"
-                                    if rename_alternatives or add_suggested_suffix:
-                                        display_name = f"🔄 {suggestion['filename']} → {preview_name}{duplicate_suffix}"
-                                    else:
-                                        display_name = f"🔄 {suggestion['filename']}{duplicate_suffix}"
+                                    display_name = f"🔄 {preview_name}{duplicate_suffix}"
                                 else:
-                                    if rename_alternatives or add_suggested_suffix:
-                                        display_name = f"🔄 {suggestion['filename']} → {preview_name}"
-                                    else:
-                                        display_name = f"🔄 {suggestion['filename']}"
+                                    display_name = f"🔄 {preview_name}"
                                 
-                                # Show which webkode it's from
-                                display_name += f" (fra {suggestion['webkode']})"
+                                # Show which original file it's from
+                                display_name += f" (fra {original_filename})"
                                 
-                                help_text = suggestion['suggestion_reason']
-                                if rename_alternatives or add_suggested_suffix or (add_prefix_to_no_prefix and suggestion.get('match_type') == 'without_prefix'):
+                                # Build help text
+                                help_text = suggestion.get('suggestion_reason', 'Alternativ fundet')
+                                if add_suggested_suffix or (add_prefix_to_no_prefix and suggestion.get('match_type') == 'without_prefix'):
                                     help_text += f" - Vil blive omdøbt til {preview_name}"
                                 
                                 # Display checkbox
@@ -475,72 +493,49 @@ def show():
                             # No suggestions available
                             st.write(f"• **{webkode}** - Ingen alternativer fundet")
                             
-                # Update settings variables with checkbox values
-                st.subheader("⚙️ Indstillinger")
-                col1, col2, col3, col4 = st.columns(spec=[1, 1, 2, 3], gap="large")
+                # Batch selection buttons
+                st.subheader("🎛️ Batch-valg")
+                col1, col2, col3, col4 = st.columns(4)
                            
                 with col1:
-                    if st.button("✅ Vælg alle inkl. forslag"):
-                        # Clear existing selections and select all using registry keys
-                        st.session_state.selected_images.clear()
-                        
-                        # Select all keys from registry
-                        for key in keys_registry.keys():
-                            st.session_state.selected_images.add(key)
-                        
-                        st.rerun()    
-                                
-                    if st.button("❌ Fravælg alle"):
-                        st.session_state.selected_images.clear()
-                        st.rerun()
+                    select_all_clicked = st.button("✅ Vælg alle inkl. forslag", key="btn_select_all")
                 
                 with col2:
-                    
-                    if st.button("🎯 Vælg kun hele matches"):
-                        # Clear existing selections and select only exact matches using registry
-                        st.session_state.selected_images.clear()
-                        
-                        # Select only found images (no suggestions)
-                        for key, data in keys_registry.items():
-                            if data['type'] == 'found':
-                                st.session_state.selected_images.add(key)
-                        
-                        st.rerun()
-                    
-                    if st.button("📄 Fravælg dubletter"):
-                        # Remove duplicates from selection (keep only copy #1 of each duplicate)
-                        keys_to_remove = set()
-                        
-                        # Check registry for duplicates
-                        for key, data in keys_registry.items():
-                            if data['is_duplicate'] and data['duplicate_number'] > 1:
-                                keys_to_remove.add(key)
-                        
-                        # Remove the duplicate keys
-                        for key in keys_to_remove:
-                            st.session_state.selected_images.discard(key)
-                        
-                        st.rerun()
+                    select_exact_clicked = st.button("🎯 Vælg kun hele matches", key="btn_select_exact")
                 
-                with col3:                
-                    rename_alternatives = st.checkbox(
-                        "📝 Omdøb alternative filer til det ønskede variant-nummer",
-                        help="Eksempel: IT22828-0029-00_01.jpg → IT22828-0029-50_01.jpg hvis du søgte efter IT22828-0029-50"
-                    )
-                
-                    add_suggested_suffix = st.checkbox(
-                        "🏷️ Tilføj '_suggested' til alternative filer",
-                        help="Eksempel: IT22828-0029-50_01.jpg → IT22828-0029-50_01_suggested.jpg"
-                    )
-            
-                    add_prefix_to_no_prefix = st.checkbox(
-                        "🔤 Tilføj præfiks til filer fundet uden præfiks",
-                        help="Eksempel: 21776-0375-00_001.jpg → IC21776-0375-00_001.jpg"
-                    )
+                with col3:
+                    deselect_dupes_clicked = st.button("📄 Fravælg dubletter", key="btn_deselect_dupes")
                 
                 with col4:
-                    # Empty column for spacing
-                    "" 
+                    deselect_all_clicked = st.button("❌ Fravælg alle", key="btn_deselect_all")
+                
+                # Handle button clicks AFTER all buttons are rendered
+                if select_all_clicked:
+                    # Select all keys from registry
+                    st.session_state.selected_images = set(keys_registry.keys())
+                    st.rerun()
+                
+                if deselect_all_clicked:
+                    st.session_state.selected_images = set()
+                    st.rerun()
+                
+                if select_exact_clicked:
+                    # Select only found images (no suggestions)
+                    st.session_state.selected_images = {
+                        key for key, data in keys_registry.items() 
+                        if data['type'] == 'found'
+                    }
+                    st.rerun()
+                
+                if deselect_dupes_clicked:
+                    # Remove duplicates from selection (keep only copy #1 of each duplicate)
+                    keys_to_keep = {
+                        key for key, data in keys_registry.items()
+                        if not data['is_duplicate'] or data['duplicate_number'] == 1
+                    }
+                    # Only keep selected keys that should be kept
+                    st.session_state.selected_images = st.session_state.selected_images & keys_to_keep
+                    st.rerun()
                                     
                 # Download section - count selected images (including suggestions)
                 all_selected_keys = st.session_state.selected_images
@@ -550,7 +545,7 @@ def show():
                     st.header(f"⬇️ Hent valgte billeder ({selected_count})")
                     
                     # Check if too many images are selected
-                    MAX_IMAGES_PER_ZIP = 300
+                    MAX_IMAGES_PER_ZIP = 1300
                     
                     if selected_count > MAX_IMAGES_PER_ZIP:
                         st.error(f"⚠️ **For mange billeder valgt!**")
