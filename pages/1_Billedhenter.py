@@ -31,7 +31,9 @@ def init_session_state():
         'search_results': {},
         'selected_images': set(),
         'image_keys_registry': {},
-        'current_page': 'billedhenter'
+        'current_page': 'billedhenter',
+        'debug_message': '',
+        'last_action': ''
     }
     
     for key, default_value in defaults.items():
@@ -43,18 +45,25 @@ def select_all_callback():
     """Select all images including suggestions"""
     if st.session_state.image_keys_registry:
         st.session_state.selected_images = set(st.session_state.image_keys_registry.keys())
+        st.session_state.debug_message = f"✅ DEBUG: Valgt {len(st.session_state.selected_images)} billeder (Vælg alle)"
+        st.session_state.last_action = f"select_all - {len(st.session_state.selected_images)} images"
 
 def deselect_all_callback():
     """Deselect all images"""
     st.session_state.selected_images = set()
+    st.session_state.debug_message = f"❌ DEBUG: Fravalgt alle billeder"
+    st.session_state.last_action = "deselect_all"
 
 def select_exact_callback():
     """Select only exact matches (no suggestions)"""
     if st.session_state.image_keys_registry:
-        st.session_state.selected_images = {
+        exact_matches = {
             key for key, data in st.session_state.image_keys_registry.items() 
             if data['type'] == 'found'
         }
+        st.session_state.selected_images = exact_matches
+        st.session_state.debug_message = f"🎯 DEBUG: Valgt {len(exact_matches)} hele matches"
+        st.session_state.last_action = f"select_exact - {len(exact_matches)} images"
 
 def deselect_dupes_callback():
     """Deselect duplicate images (keep only copy #1)"""
@@ -63,7 +72,12 @@ def deselect_dupes_callback():
             key for key, data in st.session_state.image_keys_registry.items()
             if not data['is_duplicate'] or data['duplicate_number'] == 1
         }
+        before_count = len(st.session_state.selected_images)
         st.session_state.selected_images = st.session_state.selected_images & keys_to_keep
+        after_count = len(st.session_state.selected_images)
+        removed = before_count - after_count
+        st.session_state.debug_message = f"📄 DEBUG: Fjernet {removed} dubletter (før: {before_count}, efter: {after_count})"
+        st.session_state.last_action = f"deselect_dupes - removed {removed}"
 
 def create_suggested_filename(original_filename, searched_webkode, rename_alternatives, add_suggested_suffix):
     """Create filename for suggested images with improved logic"""
@@ -173,6 +187,13 @@ def show():
     st.write("""Her kan du hente billeder fra ICRT databasen ved at indsætte webkoder eller uploade et prisark.  
         Du kan også vælge at omdøbe alternative billeder inden download, så du slipper for at gøre det manuelt bagefter.
     """)
+    
+    # DEBUG: Show debug messages at the top
+    if st.session_state.debug_message:
+        st.info(f"🐛 {st.session_state.debug_message}")
+        st.caption(f"Last action: {st.session_state.last_action}")
+        st.caption(f"Current selected count: {len(st.session_state.selected_images)}")
+        st.caption(f"Registry keys count: {len(st.session_state.image_keys_registry)}")
     
     # Initialize downloader
     downloader = ICRTImageDownloader()
@@ -376,6 +397,9 @@ def show():
                 
                 # Store registry in session state - THIS IS CRITICAL
                 st.session_state.image_keys_registry = keys_registry
+                
+                # DEBUG: Show registry info
+                st.caption(f"🐛 DEBUG: Registry har {len(keys_registry)} keys")
                 
                 # Settings section - MOVED HERE BEFORE DISPLAY
                 st.subheader("⚙️ Indstillinger")
