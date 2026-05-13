@@ -91,9 +91,6 @@ class ICRTImageDownloader:
         # Create a set of webkodes for faster lookup (convert to lowercase)
         webkode_set = {code.strip().lower() for code in webkodes}
         
-        # Debug: Show what we're searching for
-        st.write(f"🔍 Søger efter følgende koder: {list(webkode_set)}")
-        
         # Also create a set without prefixes for fallback search
         webkode_without_prefix_set = set()
         webkode_prefix_mapping = {}  # Maps code without prefix back to original code
@@ -105,10 +102,6 @@ class ICRTImageDownloader:
                 code_without_prefix = clean_code[2:]  # Remove first 2 characters
                 webkode_without_prefix_set.add(code_without_prefix.lower())
                 webkode_prefix_mapping[code_without_prefix.lower()] = clean_code
-        
-        # Debug: Show fallback codes
-        if webkode_without_prefix_set:
-            st.write(f"🔄 Fallback søgning efter koder uden præfiks: {list(webkode_without_prefix_set)}")
         
         # Build GraphQL query using variables
         query = """
