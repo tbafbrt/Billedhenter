@@ -2,5 +2,5 @@
 # Hæv WebSocket-grænsen (standard 200 MB) så en enkelt ZIP-del har lidt
 # ekstra margin. Hver del holdes alligevel under ~75 billeder, så vi ikke
 # rammer RAM-loftet på Streamlit Community Cloud.
-maxMessageSize = 300
+maxMessageSize = 400
 maxUploadSize = 200

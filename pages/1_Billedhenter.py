@@ -24,8 +24,8 @@ st.set_page_config(
 # ZIP-delene fyldes op til et byte-budget (baseret på billedernes 'size'),
 # så få store billeder giver små dele og mange små giver store dele — uden at
 # overskride RAM/WebSocket-grænsen på Streamlit Community Cloud.
-PART_BYTE_BUDGET = 150 * 1024 * 1024   # ~150 MB pr. ZIP-del
-PART_MAX_FILES = 150                   # loft på antal filer pr. del (download-tid)
+PART_BYTE_BUDGET = 250 * 1024 * 1024   # ~250 MB pr. ZIP-del
+PART_MAX_FILES = 250                   # loft på antal filer pr. del (download-tid)
 ASSUMED_SIZE_BYTES = 1_500_000         # antaget størrelse når 'size' mangler (~1,5 MB)
 # Øvre grænse for hvor mange billeder man kan vælge i alt (sanity-loft).
 MAX_TOTAL_IMAGES = 1000
