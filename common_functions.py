@@ -10,6 +10,14 @@ from typing import List, Dict, Tuple, Optional
 
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".tif", ".tiff", ".bmp")
 
+
+def parse_size(value) -> int:
+    """Konvertér API'ets 'size' (bytes som streng) til int. 0 hvis ukendt."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
 class ICRTImageDownloader:
     """ICRT API handler for image downloading"""
     
@@ -107,6 +115,8 @@ class ICRTImageDownloader:
                 media {
                     filename
                     image
+                    size
+                    thumbnail
                 }
             }
         }
@@ -164,46 +174,52 @@ class ICRTImageDownloader:
             
             filename = media.get('filename', '')
             image_url = media.get('image', '')
-            
+            size = parse_size(media.get('size'))
+            thumbnail = media.get('thumbnail', '')
+
             if filename and image_url:
                 # Extract product code
                 product_code = extract_product_code(filename)
-                
+
                 # Check for direct match first
                 if product_code in webkode_set:
                     found_count += 1
-                    
+
                     # Find original webkode
                     original_webkode = None
                     for original in webkodes:
                         if original.strip().lower() == product_code:
                             original_webkode = original.strip()
                             break
-                    
+
                     if original_webkode:
                         if original_webkode not in results['found']:
                             results['found'][original_webkode] = []
-                        
+
                         results['found'][original_webkode].append({
                             'url': image_url,
                             'filename': filename,
-                            'webkode': original_webkode
+                            'webkode': original_webkode,
+                            'size': size,
+                            'thumbnail': thumbnail,
                         })
-                
+
                 # Check for match without prefix (fallback search)
                 elif product_code in webkode_without_prefix_set:
                     found_count += 1
-                    
+
                     # Get the original webkode that this matches
                     original_webkode = webkode_prefix_mapping[product_code]
-                    
+
                     if original_webkode not in results['found']:
                         results['found'][original_webkode] = []
-                    
+
                     results['found'][original_webkode].append({
                         'url': image_url,
                         'filename': filename,
                         'webkode': original_webkode,
+                        'size': size,
+                        'thumbnail': thumbnail,
                         'match_type': 'without_prefix'  # Flag to indicate this was a prefix-less match
                     })
         
@@ -232,13 +248,15 @@ class ICRTImageDownloader:
                             if filename:
                                 # Extract product code from filename
                                 product_code = extract_product_code(filename)
-                                
+                                m_size = parse_size(media.get('size'))
+                                m_thumb = media.get('thumbnail', '')
+
                                 # Check if this file belongs to the same base product (with or without prefix)
                                 if '-' in product_code:
                                     file_parts = product_code.split('-')
                                     if len(file_parts) >= 3:
                                         file_base = '-'.join(file_parts[:-1])
-                                        
+
                                         # Check direct match
                                         if file_base.lower() == base_product.lower() and product_code.lower() != clean_webkode.lower():
                                             variant_suggestions.append({
@@ -246,9 +264,11 @@ class ICRTImageDownloader:
                                                 'filename': filename,
                                                 'webkode': product_code,
                                                 'original_webkode': clean_webkode,
+                                                'size': m_size,
+                                                'thumbnail': m_thumb,
                                                 'suggestion_reason': f"Alternative variant ({product_code}) found for missing variant ({clean_webkode})"
                                             })
-                                        
+
                                         # Also check without prefix
                                         elif len(clean_webkode) > 2 and clean_webkode[:2].isalpha():
                                             base_without_prefix = base_product[2:] if len(base_product) > 2 and base_product[:2].isalpha() else base_product
@@ -258,6 +278,8 @@ class ICRTImageDownloader:
                                                     'filename': filename,
                                                     'webkode': product_code,
                                                     'original_webkode': clean_webkode,
+                                                    'size': m_size,
+                                                    'thumbnail': m_thumb,
                                                     'suggestion_reason': f"Alternative variant without prefix ({product_code}) found for missing variant ({clean_webkode})",
                                                     'match_type': 'without_prefix'  # Add this flag for suggestions too
                                                 })

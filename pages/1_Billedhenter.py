@@ -21,12 +21,16 @@ st.set_page_config(
     layout="wide",
 )
 
-# Antal billeder pr. ZIP-del. Holdes lavt så hver del bliver under
-# RAM/WebSocket-grænsen på Streamlit Community Cloud. Vælger man flere end
-# dette, deles downloaden automatisk op i flere dele.
-PART_SIZE = 75
+# ZIP-delene fyldes op til et byte-budget (baseret på billedernes 'size'),
+# så få store billeder giver små dele og mange små giver store dele — uden at
+# overskride RAM/WebSocket-grænsen på Streamlit Community Cloud.
+PART_BYTE_BUDGET = 150 * 1024 * 1024   # ~150 MB pr. ZIP-del
+PART_MAX_FILES = 150                   # loft på antal filer pr. del (download-tid)
+ASSUMED_SIZE_BYTES = 1_500_000         # antaget størrelse når 'size' mangler (~1,5 MB)
 # Øvre grænse for hvor mange billeder man kan vælge i alt (sanity-loft).
 MAX_TOTAL_IMAGES = 1000
+# Antal thumbnails pr. række i resultat-gridet.
+GRID_COLS = 4
 
 
 # ---------------------------------------------------------------------------
@@ -276,9 +280,116 @@ def build_selected_images(
             'url': image['url'],
             'filename': final_filename,
             'webkode': webkode,
+            'size': image.get('size', 0),
         })
 
     return selected_images
+
+
+def split_into_parts(images: list) -> list:
+    """Del billeder op i ZIP-dele ud fra et byte-budget.
+
+    Hver del fyldes op til PART_BYTE_BUDGET (eller PART_MAX_FILES filer),
+    så store billeder giver små dele og små billeder giver store dele.
+    Et enkelt billede der overstiger budgettet får sin egen del.
+    """
+    parts = []
+    current = []
+    current_bytes = 0
+    for img in images:
+        size = img.get('size') or ASSUMED_SIZE_BYTES
+        if current and (current_bytes + size > PART_BYTE_BUDGET or len(current) >= PART_MAX_FILES):
+            parts.append(current)
+            current = []
+            current_bytes = 0
+        current.append(img)
+        current_bytes += size
+    if current:
+        parts.append(current)
+    return parts
+
+
+def render_image_cell(
+    key: str,
+    registry: dict,
+    webkode: str,
+    is_suggestion: bool,
+    rename_alternatives: bool,
+    add_suggested: bool,
+    add_prefix_to_no_prefix: bool,
+) -> None:
+    """Vis ét billede i gridet: thumbnail + filnavn/preview + checkbox.
+
+    Kaldes inde i en kolonne-kontekst (with col:).
+    """
+    data = registry[key]
+    image = data['image']
+    match_type = image.get('match_type', 'direct')
+
+    preview_name = build_final_filename(
+        image['filename'],
+        webkode,
+        match_type,
+        is_suggestion=is_suggestion,
+        rename_alternatives=rename_alternatives,
+        add_suggested=add_suggested,
+        add_prefix_to_no_prefix=add_prefix_to_no_prefix,
+    )
+
+    dup_suffix = f" (kopi #{data['duplicate_number']})" if data['is_duplicate'] else ""
+
+    thumbnail = image.get('thumbnail')
+    if thumbnail:
+        st.image(thumbnail, use_container_width=True)
+    else:
+        st.caption("🚫 ingen forhåndsvisning")
+
+    # Billedtekst: (kilde-)filnavn, evt. omdøbnings-preview og størrelse
+    prefix = "fra " if is_suggestion else ""
+    caption = f"{prefix}{image['filename']}{dup_suffix}"
+    if preview_name != image['filename']:
+        caption += f" → {preview_name}"
+    if match_type == 'without_prefix':
+        caption += " 🔍"
+    size_bytes = image.get('size', 0)
+    if size_bytes:
+        caption += f"  ·  {size_bytes / (1024 * 1024):.1f} MB"
+    st.caption(caption)
+
+    # Hjælpetekst
+    if is_suggestion:
+        help_text = image.get('suggestion_reason', 'Alternativ fundet')
+    elif data['is_duplicate']:
+        help_text = "Duplikat billede fundet"
+    else:
+        help_text = None
+    if match_type == 'without_prefix':
+        help_text = (help_text + " · Fundet uden præfiks") if help_text else "Fundet uden præfiks"
+
+    if key not in st.session_state:
+        st.session_state[key] = False
+    st.checkbox("Vælg", key=key, help=help_text)
+
+
+def render_grid(
+    keys: list,
+    registry: dict,
+    webkode: str,
+    is_suggestion: bool,
+    rename_alternatives: bool,
+    add_suggested: bool,
+    add_prefix_to_no_prefix: bool,
+) -> None:
+    """Vis en liste af billed-keys som et grid med GRID_COLS kolonner."""
+    for row_start in range(0, len(keys), GRID_COLS):
+        row_keys = keys[row_start:row_start + GRID_COLS]
+        cols = st.columns(GRID_COLS)
+        for col, key in zip(cols, row_keys):
+            with col:
+                render_image_cell(
+                    key, registry, webkode, is_suggestion,
+                    rename_alternatives, add_suggested, add_prefix_to_no_prefix,
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -512,46 +623,12 @@ def show():
                 for k in webkode_keys:
                     st.session_state[k] = False
 
-        for key in webkode_keys:
-            data = registry[key]
-            image = data['image']
-            match_type = image.get('match_type', 'direct')
-
-            # Build display name
-            preview_name = build_final_filename(
-                image['filename'],
-                webkode,
-                match_type,
-                is_suggestion=False,
-                rename_alternatives=rename_alternatives,
-                add_suggested=add_suggested,
-                add_prefix_to_no_prefix=add_prefix_to_no_prefix,
-            )
-
-            if data['is_duplicate']:
-                dup_suffix = f" (kopi #{data['duplicate_number']})"
-            else:
-                dup_suffix = ""
-
-            if preview_name != image['filename']:
-                display_name = f"📷 {image['filename']}{dup_suffix} → {preview_name}"
-                help_text = f"Vil blive omdøbt til: {preview_name}"
-            else:
-                display_name = f"📷 {image['filename']}{dup_suffix}"
-                help_text = "Duplikat billede fundet" if data['is_duplicate'] else None
-
-            if match_type == 'without_prefix':
-                display_name += " 🔍"
-                hint = "Fundet uden præfiks"
-                help_text = (help_text + " · " + hint) if help_text else hint
-
-            # Ensure key exists in session_state with default False
-            if key not in st.session_state:
-                st.session_state[key] = False
-
-            # Render checkbox WITHOUT value= so the widget uses st.session_state[key] only.
-            # This is the critical fix that makes the batch buttons work.
-            st.checkbox(display_name, key=key, help=help_text)
+        render_grid(
+            webkode_keys, registry, webkode, is_suggestion=False,
+            rename_alternatives=rename_alternatives,
+            add_suggested=add_suggested,
+            add_prefix_to_no_prefix=add_prefix_to_no_prefix,
+        )
 
     # --- Render suggestions ------------------------------------------------
     if results['missing']:
@@ -570,35 +647,12 @@ def show():
                 if data['type'] == 'suggestion' and data['webkode'] == webkode
             ]
 
-            for key in suggestion_keys:
-                data = registry[key]
-                suggestion = data['image']
-                match_type = suggestion.get('match_type', 'direct')
-
-                preview_name = build_final_filename(
-                    suggestion['filename'],
-                    webkode,
-                    match_type,
-                    is_suggestion=True,
-                    rename_alternatives=rename_alternatives,
-                    add_suggested=add_suggested,
-                    add_prefix_to_no_prefix=add_prefix_to_no_prefix,
-                )
-
-                if data['is_duplicate']:
-                    dup_suffix = f" (kopi #{data['duplicate_number']})"
-                else:
-                    dup_suffix = ""
-
-                display_name = f"🔄 {preview_name}{dup_suffix} (fra {suggestion['filename']})"
-                help_text = suggestion.get('suggestion_reason', 'Alternativ fundet')
-                if preview_name != suggestion['filename']:
-                    help_text += f" · Vil blive omdøbt til {preview_name}"
-
-                if key not in st.session_state:
-                    st.session_state[key] = False
-
-                st.checkbox(display_name, key=key, help=help_text)
+            render_grid(
+                suggestion_keys, registry, webkode, is_suggestion=True,
+                rename_alternatives=rename_alternatives,
+                add_suggested=add_suggested,
+                add_prefix_to_no_prefix=add_prefix_to_no_prefix,
+            )
 
     # --- Download section --------------------------------------------------
     selected_keys = get_selected_keys(registry)
@@ -616,11 +670,12 @@ def show():
         )
         return
 
-    # Opløs filnavne for hele valget (global dedup) og del op i ZIP-dele.
+    # Opløs filnavne for hele valget (global dedup) og del op i ZIP-dele
+    # ud fra billedernes faktiske størrelse (byte-budget).
     all_images = build_selected_images(
         selected_keys, registry, rename_alternatives, add_suggested, add_prefix_to_no_prefix
     )
-    parts = [all_images[i:i + PART_SIZE] for i in range(0, len(all_images), PART_SIZE)]
+    parts = split_into_parts(all_images)
     num_parts = len(parts)
 
     # Signatur over valget + indstillinger, så en gammel pakket ZIP ikke kan
@@ -635,19 +690,20 @@ def show():
     if num_parts > 1:
         st.info(
             f"📦 {selected_count} billeder deles automatisk i **{num_parts} ZIP-dele** "
-            f"(højst {PART_SIZE} pr. del). Pak og download hver del for sig — "
-            f"så holder vi os under hukommelses- og overførselsgrænserne."
+            f"(efter filstørrelse). Pak og download hver del for sig — så holder vi os "
+            f"under hukommelses- og overførselsgrænserne."
         )
 
     timestamp = int(time.time())
 
     for idx, part in enumerate(parts):
         part_signature = base_signature + (idx,)
+        part_mb = sum(img.get('size', 0) for img in part) / (1024 * 1024)
 
         if num_parts > 1:
-            first = idx * PART_SIZE + 1
-            last = idx * PART_SIZE + len(part)
-            st.markdown(f"**Del {idx + 1}/{num_parts}** — billede {first}–{last} ({len(part)} stk.)")
+            st.markdown(
+                f"**Del {idx + 1}/{num_parts}** — {len(part)} billeder (~{part_mb:.0f} MB)"
+            )
             pack_label = f"📦 Pak del {idx + 1}"
             file_suffix = f"_del{idx + 1}"
         else:
