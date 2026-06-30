@@ -498,6 +498,20 @@ def show():
             if data['type'] == 'found' and data['webkode'] == webkode
         ]
 
+        # Per-produkt valg. Knapperne ligger over produktets checkboxes, så
+        # ændringen i session_state slår igennem når checkboxene rendres nedenfor.
+        bcol1, bcol2, _ = st.columns([2, 2, 6])
+        with bcol1:
+            if st.button("✅ Vælg alle her", key=f"select_product_{webkode}",
+                         use_container_width=True):
+                for k in webkode_keys:
+                    st.session_state[k] = True
+        with bcol2:
+            if st.button("⬜ Fravælg alle her", key=f"deselect_product_{webkode}",
+                         use_container_width=True):
+                for k in webkode_keys:
+                    st.session_state[k] = False
+
         for key in webkode_keys:
             data = registry[key]
             image = data['image']
