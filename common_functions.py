@@ -1,14 +1,14 @@
 import streamlit as st
 import requests
 import pandas as pd
-import io
+import os
 import zipfile
 import re
-from PIL import Image
-from typing import List, Dict, Tuple, Optional
 import time
-import base64
-import os
+import tempfile
+from typing import List, Dict, Tuple, Optional
+
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".tif", ".tiff", ".bmp")
 
 class ICRTImageDownloader:
     """ICRT API handler for image downloading"""
@@ -70,10 +70,6 @@ class ICRTImageDownloader:
         except requests.exceptions.RequestException as e:
             return False, {"error": f"Connection error: {str(e)}"}
     
-    def refresh_authentication(self) -> bool:
-        """Try to refresh authentication using stored credentials"""
-        return False
-    
     def extract_project_code(self, webkode: str) -> str:
         """Extract project code from webkode"""
         # Pattern: LLDDDDD-DDDD-DD or DDDDD-DDDD-DD
@@ -124,23 +120,14 @@ class ICRTImageDownloader:
         success, response = self.query_graphql_with_variables(query, variables)
         
         if not success:
-            # Check if JWT expired
             if response.get('error') == 'jwt_expired':
-                st.error("🔒 Din session er udløbet. Du skal logge ind igen med dine API-oplysninger.")
-                
-                # Clear the API authentication state to force re-login
+                # Tving re-login: ryd API-state, så credentials-skærmen vises ved næste rerun
                 st.session_state.api_authenticated = False
                 st.session_state.jwt_token = None
-                
-                # Show re-authentication button
-                st.warning("Klik på knappen herunder for at gå tilbage til API login-siden.")
-                if st.button("🔄 Gå til API Login", type="primary"):
-                    st.rerun()
-                
-                return results
+                st.error("🔒 Din session er udløbet. Log ind igen med dine API-oplysninger.")
             else:
-                st.error(f"Failed to query images: {response.get('error', 'Unknown error')}")
-                return results
+                st.error(f"Kunne ikke hente billeder: {response.get('error', 'Ukendt fejl')}")
+            return results
         
         if 'errors' in response:
             st.error(f"GraphQL errors: {response['errors']}")
@@ -153,7 +140,7 @@ class ICRTImageDownloader:
             return results
         
         media_files = project_data.get('media', [])
-        st.write(f"📊 Samlet antal billeder fundet {len(media_files)} ")
+        st.caption(f"📊 Samlet antal billeder i projektet: {len(media_files)}")
         
         # Use the proven extract_product_code function
         def extract_product_code(filename):
@@ -236,9 +223,7 @@ class ICRTImageDownloader:
                     parts = clean_webkode.split('-')
                     if len(parts) >= 3:  # Format: LLDDDDD-DDDD-DD
                         base_product = '-'.join(parts[:-1])  # e.g., "OT18486-0047"
-                        
-                        st.write(f"🔍 Foreslag til alternativer til {clean_webkode} (baseret på: {base_product})")
-                        
+
                         # Search through ALL media files for variants of this base product
                         variant_suggestions = []
                         
@@ -282,10 +267,7 @@ class ICRTImageDownloader:
                             if 'suggestions' not in results:
                                 results['suggestions'] = {}
                             results['suggestions'][clean_webkode] = variant_suggestions
-                            st.write(f"✅ Fundet {len(variant_suggestions)} alternativ(-er) til {clean_webkode}")
-                        else:
-                            st.write(f"❌ No variant alternatives found for {clean_webkode}")
-        
+
         st.success(f"🎯 Søgning afsluttet: Fundet {found_count} billeder til i alt {len(results['found'])} webkoder")
         
         return results
@@ -380,29 +362,58 @@ def parse_text_input(text_input: str) -> Tuple[Optional[List[str]], Optional[str
     except Exception as e:
         return None, f"Error parsing text input: {str(e)}"
 
+def ensure_extension(filename: str) -> str:
+    """Sørg for at filnavnet har en billed-endelse (default .jpg).
+
+    Undgår dobbelt-endelse (fx 'navn.jpg.jpg') ved kun at tilføje en endelse
+    hvis der ikke allerede er en billed-endelse.
+    """
+    return filename if filename.lower().endswith(IMAGE_EXTENSIONS) else f"{filename}.jpg"
+
+
 def create_download_zip(selected_images: List[Dict]) -> bytes:
-    """Create ZIP file with selected images"""
-    zip_buffer = io.BytesIO()
-    
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        for i, image_info in enumerate(selected_images):
-            status_text.text(f"Downloading... {i+1}/{len(selected_images)}")
-            progress_bar.progress((i + 1) / len(selected_images))
-            
-            try:
-                response = requests.get(image_info['url'], timeout=30)
-                if response.status_code == 200:
-                    zip_file.writestr(image_info['filename'] + '.jpg', response.content)
-            except Exception as e:
-                st.warning(f"Failed to download {image_info['filename']}: {str(e)}")
-        
+    """Pak billeder til en ZIP.
+
+    ZIP'en bygges på disk (tempfil), så kun ét billede holdes i hukommelsen
+    ad gangen. Det holder forbruget under RAM- og WebSocket-grænserne på
+    Streamlit Cloud, hvor den tidligere in-memory-version kunne crashe.
+    """
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    failures: List[str] = []
+
+    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        with zipfile.ZipFile(tmp_path, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for i, image_info in enumerate(selected_images):
+                status_text.text(f"Henter billede {i + 1}/{len(selected_images)} ...")
+                progress_bar.progress((i + 1) / len(selected_images))
+                try:
+                    response = requests.get(image_info['url'], timeout=30)
+                    if response.status_code == 200:
+                        zip_file.writestr(ensure_extension(image_info['filename']), response.content)
+                    else:
+                        failures.append(f"{image_info['filename']} (HTTP {response.status_code})")
+                except requests.exceptions.RequestException as e:
+                    failures.append(f"{image_info['filename']} ({e})")
+
+        with open(tmp_path, 'rb') as fh:
+            data = fh.read()
+    finally:
         progress_bar.empty()
         status_text.empty()
-    
-    return zip_buffer.getvalue()
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+    if failures:
+        st.warning(
+            "⚠️ Kunne ikke hente: "
+            + ", ".join(failures[:10])
+            + ("..." if len(failures) > 10 else "")
+        )
+    return data
 
 def api_credentials_screen():
     """Display API credentials input"""

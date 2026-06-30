@@ -34,6 +34,9 @@ def init_session_state():
         'search_results': {},
         'image_keys_registry': {},
         'current_page': 'billedhenter',
+        'zip_bytes': None,
+        'zip_name': None,
+        'zip_signature': None,
     }
     for key, default_value in defaults.items():
         if key not in st.session_state:
@@ -315,6 +318,9 @@ def show():
         # Clear old checkbox states before new search
         clear_checkbox_states()
         st.session_state.image_keys_registry = {}
+        # Nulstil tidligere pakket ZIP
+        st.session_state.zip_bytes = None
+        st.session_state.zip_signature = None
 
         with st.spinner("Søger efter filer..."):
             results = downloader.search_images_for_codes(project_code_input, webkodes)
@@ -532,7 +538,7 @@ def show():
 
     st.header(f"⬇️ Hent valgte billeder ({selected_count})")
 
-    MAX_IMAGES_PER_ZIP = 300
+    MAX_IMAGES_PER_ZIP = 75
 
     if selected_count > MAX_IMAGES_PER_ZIP:
         st.error("⚠️ **For mange billeder valgt!**")
@@ -540,77 +546,77 @@ def show():
             f"Du har valgt **{selected_count} billeder**, men maksimum er "
             f"**{MAX_IMAGES_PER_ZIP} billeder** per download."
         )
-        st.info("💡 **Løsninger:**")
         st.markdown(
-            """
-            - **Fravælg nogle billeder** og prøv igen
-            - **Brug 'Fravælg dubletter'** for at reducere antallet
-            - **Download i mindre portioner** - vælg færre billeder ad gangen
-            """
+            f"Fravælg **{selected_count - MAX_IMAGES_PER_ZIP}** billeder (brug evt. "
+            f"**'Fravælg dubletter'**) og download i mindre portioner."
         )
-        excess = selected_count - MAX_IMAGES_PER_ZIP
-        st.markdown(f"🎯 **Du skal fravælge {excess} billeder for at fortsætte**")
         return
 
-    # Size estimate
-    if selected_count <= 100:
-        st.info(f"🟢 **ZIP størrelse**: lille (~{selected_count * 0.2:.1f}MB estimeret)")
-    elif selected_count <= 200:
-        st.info(f"🟡 **ZIP størrelse**: medium (~{selected_count * 0.2:.1f}MB estimeret)")
-    else:
-        st.info(f"🟠 **ZIP størrelse**: stor (~{selected_count * 0.2:.1f}MB estimeret)")
-
-    if not st.button("📦 Pak ZIP fil", type="primary"):
-        return
-
-    # Build list of images to download
-    selected_images = []
-    used_filenames = {}  # tracks duplicate filenames for download
-
-    for key in selected_keys:
-        data = registry[key]
-        image = data['image']
-        webkode = data['webkode']
-        match_type = image.get('match_type', 'direct')
-        is_suggestion = (data['type'] == 'suggestion')
-
-        final_filename = build_final_filename(
-            image['filename'],
-            webkode,
-            match_type,
-            is_suggestion=is_suggestion,
-            rename_alternatives=rename_alternatives,
-            add_suggested=add_suggested,
-            add_prefix_to_no_prefix=add_prefix_to_no_prefix,
-        )
-
-        # De-duplicate filenames at the ZIP-level
-        if final_filename in used_filenames:
-            used_filenames[final_filename] += 1
-            base, ext = split_filename(final_filename)
-            final_filename = f"{base}_kopi{used_filenames[final_filename]}" + (
-                f".{ext}" if ext else ""
-            )
-        else:
-            used_filenames[final_filename] = 0
-
-        selected_images.append({
-            'url': image['url'],
-            'filename': final_filename,
-            'webkode': webkode,
-        })
-
-    with st.spinner("Pakker dine filer..."):
-        zip_data = create_download_zip(selected_images)
-
-    st.download_button(
-        label="💾 Download ZIP fil",
-        data=zip_data,
-        file_name=f"icrt_images_{project_code_input}_{int(time.time())}.zip",
-        mime="application/zip",
-        use_container_width=True,
+    # Signatur over det aktuelle valg + omdøbnings-indstillinger, så en gammel
+    # pakket ZIP ikke kan downloades hvis valget er ændret.
+    signature = (
+        tuple(sorted(selected_keys)),
+        rename_alternatives,
+        add_suggested,
+        add_prefix_to_no_prefix,
     )
-    st.success("✅ ZIP fil er klar til download!")
+
+    if st.button("📦 Pak ZIP fil", type="primary"):
+        # Build list of images to download
+        selected_images = []
+        used_filenames = {}  # tracks duplicate filenames for download
+
+        for key in selected_keys:
+            data = registry[key]
+            image = data['image']
+            webkode = data['webkode']
+            match_type = image.get('match_type', 'direct')
+            is_suggestion = (data['type'] == 'suggestion')
+
+            final_filename = build_final_filename(
+                image['filename'],
+                webkode,
+                match_type,
+                is_suggestion=is_suggestion,
+                rename_alternatives=rename_alternatives,
+                add_suggested=add_suggested,
+                add_prefix_to_no_prefix=add_prefix_to_no_prefix,
+            )
+
+            # De-duplicate filenames at the ZIP-level
+            if final_filename in used_filenames:
+                used_filenames[final_filename] += 1
+                base, ext = split_filename(final_filename)
+                final_filename = f"{base}_kopi{used_filenames[final_filename]}" + (
+                    f".{ext}" if ext else ""
+                )
+            else:
+                used_filenames[final_filename] = 0
+
+            selected_images.append({
+                'url': image['url'],
+                'filename': final_filename,
+                'webkode': webkode,
+            })
+
+        with st.spinner("Pakker dine filer..."):
+            st.session_state.zip_bytes = create_download_zip(selected_images)
+        st.session_state.zip_name = f"icrt_images_{project_code_input}_{int(time.time())}.zip"
+        st.session_state.zip_signature = signature
+
+    # Vis download-knappen stabilt så længe valget matcher den pakkede ZIP
+    if st.session_state.zip_bytes is not None and st.session_state.zip_signature == signature:
+        size_mb = len(st.session_state.zip_bytes) / (1024 * 1024)
+        st.success(f"✅ ZIP fil er klar til download ({size_mb:.1f} MB)")
+        st.download_button(
+            label="💾 Download ZIP fil",
+            data=st.session_state.zip_bytes,
+            file_name=st.session_state.zip_name,
+            mime="application/zip",
+            use_container_width=True,
+        )
+    elif st.session_state.zip_bytes is not None:
+        st.info("Dit valg er ændret. Tryk **'Pak ZIP fil'** igen for at opdatere downloaden.")
 
 
 # ---------------------------------------------------------------------------
