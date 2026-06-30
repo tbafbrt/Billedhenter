@@ -21,6 +21,13 @@ st.set_page_config(
     layout="wide",
 )
 
+# Antal billeder pr. ZIP-del. Holdes lavt så hver del bliver under
+# RAM/WebSocket-grænsen på Streamlit Community Cloud. Vælger man flere end
+# dette, deles downloaden automatisk op i flere dele.
+PART_SIZE = 75
+# Øvre grænse for hvor mange billeder man kan vælge i alt (sanity-loft).
+MAX_TOTAL_IMAGES = 1000
+
 
 # ---------------------------------------------------------------------------
 # Session state
@@ -222,6 +229,56 @@ def build_registry(results: dict) -> dict:
 def get_selected_keys(registry: dict) -> set:
     """Return set of registry keys currently checked (single source of truth)."""
     return {key for key in registry if st.session_state.get(key, False)}
+
+
+def build_selected_images(
+    selected_keys,
+    registry: dict,
+    rename_alternatives: bool,
+    add_suggested: bool,
+    add_prefix_to_no_prefix: bool,
+) -> list:
+    """Byg en ordnet liste {url, filename} for de valgte billeder.
+
+    Filnavne gøres unikke på tværs af HELE valget (global dedup), så
+    rækkefølgen er stabil, før listen evt. deles op i ZIP-dele.
+    """
+    selected_images = []
+    used_filenames = {}
+
+    for key in sorted(selected_keys):
+        data = registry[key]
+        image = data['image']
+        webkode = data['webkode']
+        match_type = image.get('match_type', 'direct')
+        is_suggestion = (data['type'] == 'suggestion')
+
+        final_filename = build_final_filename(
+            image['filename'],
+            webkode,
+            match_type,
+            is_suggestion=is_suggestion,
+            rename_alternatives=rename_alternatives,
+            add_suggested=add_suggested,
+            add_prefix_to_no_prefix=add_prefix_to_no_prefix,
+        )
+
+        if final_filename in used_filenames:
+            used_filenames[final_filename] += 1
+            base, ext = split_filename(final_filename)
+            final_filename = f"{base}_kopi{used_filenames[final_filename]}" + (
+                f".{ext}" if ext else ""
+            )
+        else:
+            used_filenames[final_filename] = 0
+
+        selected_images.append({
+            'url': image['url'],
+            'filename': final_filename,
+            'webkode': webkode,
+        })
+
+    return selected_images
 
 
 # ---------------------------------------------------------------------------
@@ -538,85 +595,75 @@ def show():
 
     st.header(f"⬇️ Hent valgte billeder ({selected_count})")
 
-    MAX_IMAGES_PER_ZIP = 75
-
-    if selected_count > MAX_IMAGES_PER_ZIP:
-        st.error("⚠️ **For mange billeder valgt!**")
-        st.warning(
-            f"Du har valgt **{selected_count} billeder**, men maksimum er "
-            f"**{MAX_IMAGES_PER_ZIP} billeder** per download."
-        )
-        st.markdown(
-            f"Fravælg **{selected_count - MAX_IMAGES_PER_ZIP}** billeder (brug evt. "
-            f"**'Fravælg dubletter'**) og download i mindre portioner."
+    if selected_count > MAX_TOTAL_IMAGES:
+        st.error(
+            f"⚠️ Du har valgt **{selected_count} billeder**, men maksimum er "
+            f"**{MAX_TOTAL_IMAGES}**. Fravælg nogle og prøv igen."
         )
         return
 
-    # Signatur over det aktuelle valg + omdøbnings-indstillinger, så en gammel
-    # pakket ZIP ikke kan downloades hvis valget er ændret.
-    signature = (
+    # Opløs filnavne for hele valget (global dedup) og del op i ZIP-dele.
+    all_images = build_selected_images(
+        selected_keys, registry, rename_alternatives, add_suggested, add_prefix_to_no_prefix
+    )
+    parts = [all_images[i:i + PART_SIZE] for i in range(0, len(all_images), PART_SIZE)]
+    num_parts = len(parts)
+
+    # Signatur over valget + indstillinger, så en gammel pakket ZIP ikke kan
+    # downloades hvis valget er ændret. Del-index gør hver del unik.
+    base_signature = (
         tuple(sorted(selected_keys)),
         rename_alternatives,
         add_suggested,
         add_prefix_to_no_prefix,
     )
 
-    if st.button("📦 Pak ZIP fil", type="primary"):
-        # Build list of images to download
-        selected_images = []
-        used_filenames = {}  # tracks duplicate filenames for download
-
-        for key in selected_keys:
-            data = registry[key]
-            image = data['image']
-            webkode = data['webkode']
-            match_type = image.get('match_type', 'direct')
-            is_suggestion = (data['type'] == 'suggestion')
-
-            final_filename = build_final_filename(
-                image['filename'],
-                webkode,
-                match_type,
-                is_suggestion=is_suggestion,
-                rename_alternatives=rename_alternatives,
-                add_suggested=add_suggested,
-                add_prefix_to_no_prefix=add_prefix_to_no_prefix,
-            )
-
-            # De-duplicate filenames at the ZIP-level
-            if final_filename in used_filenames:
-                used_filenames[final_filename] += 1
-                base, ext = split_filename(final_filename)
-                final_filename = f"{base}_kopi{used_filenames[final_filename]}" + (
-                    f".{ext}" if ext else ""
-                )
-            else:
-                used_filenames[final_filename] = 0
-
-            selected_images.append({
-                'url': image['url'],
-                'filename': final_filename,
-                'webkode': webkode,
-            })
-
-        with st.spinner("Pakker dine filer..."):
-            st.session_state.zip_bytes = create_download_zip(selected_images)
-        st.session_state.zip_name = f"icrt_images_{project_code_input}_{int(time.time())}.zip"
-        st.session_state.zip_signature = signature
-
-    # Vis download-knappen stabilt så længe valget matcher den pakkede ZIP
-    if st.session_state.zip_bytes is not None and st.session_state.zip_signature == signature:
-        size_mb = len(st.session_state.zip_bytes) / (1024 * 1024)
-        st.success(f"✅ ZIP fil er klar til download ({size_mb:.1f} MB)")
-        st.download_button(
-            label="💾 Download ZIP fil",
-            data=st.session_state.zip_bytes,
-            file_name=st.session_state.zip_name,
-            mime="application/zip",
-            use_container_width=True,
+    if num_parts > 1:
+        st.info(
+            f"📦 {selected_count} billeder deles automatisk i **{num_parts} ZIP-dele** "
+            f"(højst {PART_SIZE} pr. del). Pak og download hver del for sig — "
+            f"så holder vi os under hukommelses- og overførselsgrænserne."
         )
-    elif st.session_state.zip_bytes is not None:
-        st.info("Dit valg er ændret. Tryk **'Pak ZIP fil'** igen for at opdatere downloaden.")
+
+    timestamp = int(time.time())
+
+    for idx, part in enumerate(parts):
+        part_signature = base_signature + (idx,)
+
+        if num_parts > 1:
+            first = idx * PART_SIZE + 1
+            last = idx * PART_SIZE + len(part)
+            st.markdown(f"**Del {idx + 1}/{num_parts}** — billede {first}–{last} ({len(part)} stk.)")
+            pack_label = f"📦 Pak del {idx + 1}"
+            file_suffix = f"_del{idx + 1}"
+        else:
+            pack_label = "📦 Pak ZIP fil"
+            file_suffix = ""
+
+        if st.button(pack_label, type="primary", key=f"pack_{idx}"):
+            with st.spinner(f"Pakker {len(part)} billeder ..."):
+                st.session_state.zip_bytes = create_download_zip(part)
+            st.session_state.zip_name = (
+                f"icrt_images_{project_code_input}{file_suffix}_{timestamp}.zip"
+            )
+            st.session_state.zip_signature = part_signature
+
+        # Vis download-knappen stabilt så længe denne del matcher det pakkede
+        if (
+            st.session_state.zip_bytes is not None
+            and st.session_state.zip_signature == part_signature
+        ):
+            size_mb = len(st.session_state.zip_bytes) / (1024 * 1024)
+            label = f"💾 Download del {idx + 1}" if num_parts > 1 else "💾 Download ZIP fil"
+            st.success(f"✅ Klar til download ({size_mb:.1f} MB)")
+            st.download_button(
+                label=label,
+                data=st.session_state.zip_bytes,
+                file_name=st.session_state.zip_name,
+                mime="application/zip",
+                use_container_width=True,
+                key=f"download_{idx}",
+            )
 
 
 # ---------------------------------------------------------------------------
