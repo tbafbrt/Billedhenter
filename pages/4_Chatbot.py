@@ -23,12 +23,23 @@ except Exception as e:
     ANTHROPIC_AVAILABLE = False
     IMPORT_ERRORS["anthropic"] = str(e)
 
+# mistralai har to inkompatible SDK-generationer. Deployment kan ende med
+# begge (en gammel 0.x trækkes nogle gange ned af andre pakker), så vi
+# understøtter dem begge: 1.x (`Mistral`) foretrukket, ellers 0.x (`MistralClient`).
+MISTRAL_SDK = None
 try:
-    from mistralai import Mistral
+    from mistralai import Mistral  # 1.x
     MISTRAL_AVAILABLE = True
-except Exception as e:
-    MISTRAL_AVAILABLE = False
-    IMPORT_ERRORS["mistralai"] = str(e)
+    MISTRAL_SDK = "v1"
+except Exception:
+    try:
+        from mistralai.client import MistralClient  # 0.x
+        from mistralai.models.chat_completion import ChatMessage
+        MISTRAL_AVAILABLE = True
+        MISTRAL_SDK = "v0"
+    except Exception as e:
+        MISTRAL_AVAILABLE = False
+        IMPORT_ERRORS["mistralai"] = str(e)
 
 # Fix for inotify watch limit reached error
 os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
@@ -199,8 +210,14 @@ def stream_openai(model, messages):
 
 
 def stream_mistral(model, messages):
-    client = Mistral(api_key=st.secrets["model_keys"]["mistral_api_key"])
-    response = client.chat.complete(model=model, messages=messages)
+    api_key = st.secrets["model_keys"]["mistral_api_key"]
+    if MISTRAL_SDK == "v1":
+        client = Mistral(api_key=api_key)
+        response = client.chat.complete(model=model, messages=messages)
+    else:  # v0 (gammel SDK): beskeder skal være ChatMessage-objekter
+        client = MistralClient(api_key=api_key)
+        v0_messages = [ChatMessage(role=m["role"], content=m["content"]) for m in messages]
+        response = client.chat(model=model, messages=v0_messages)
     yield response.choices[0].message.content
 
 
