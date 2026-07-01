@@ -61,7 +61,8 @@ def show():
         
         st.subheader("T&R TænkGPT Chatbot 💬")
         st.markdown("""
-        På denne side kan du chatte med 11 forskellige sprogmodeller fra OpenAI, Anthropic og Mistral.
+        Chat med en række sprogmodeller fra OpenAI, Anthropic og Mistral. Du kan også
+        vedhæfte et dokument (PDF, billede eller tekst) og få modellen til at analysere det.
         """)
         
     
