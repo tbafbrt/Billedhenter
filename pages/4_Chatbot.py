@@ -4,24 +4,31 @@ import base64
 import streamlit as st
 from auth import AuthManager
 
-# Import API clients
+# Import API clients. Fanger den fulde fejl (ikke kun ImportError), så vi kan
+# vise præcist hvorfor en udbyder mangler i deployment — fx en gammel mistralai
+# 0.x uden `Mistral`-klassen.
+IMPORT_ERRORS = {}
+
 try:
     from openai import OpenAI
     OPENAI_AVAILABLE = True
-except ImportError:
+except Exception as e:
     OPENAI_AVAILABLE = False
+    IMPORT_ERRORS["openai"] = str(e)
 
 try:
     from anthropic import Anthropic
     ANTHROPIC_AVAILABLE = True
-except ImportError:
+except Exception as e:
     ANTHROPIC_AVAILABLE = False
+    IMPORT_ERRORS["anthropic"] = str(e)
 
 try:
     from mistralai import Mistral
     MISTRAL_AVAILABLE = True
-except ImportError:
+except Exception as e:
     MISTRAL_AVAILABLE = False
+    IMPORT_ERRORS["mistralai"] = str(e)
 
 # Fix for inotify watch limit reached error
 os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
@@ -242,11 +249,16 @@ def render_model_help():
 
 
 def show():
-    # Centrér og afgræns hovedkolonnen, så chatten ligner en "rigtig" chat-app
+    # Centrér og afgræns både hovedkolonnen OG den nederste chat-input-container,
+    # så tekstfeltet ikke fylder hele bunden. Chat-inputtet bor i en separat
+    # bund-container (stBottom), som ikke rammes af .block-container alene.
     st.markdown(
         """
         <style>
         .block-container { max-width: 820px; margin: 0 auto; padding-top: 2.5rem; }
+        [data-testid="stBottomBlockContainer"] { max-width: 820px; margin: 0 auto; }
+        [data-testid="stBottom"] > div { max-width: 820px; margin: 0 auto; }
+        .stChatFloatingInputContainer { max-width: 820px; margin: 0 auto; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -257,8 +269,12 @@ def show():
                [("openai", OPENAI_AVAILABLE), ("anthropic", ANTHROPIC_AVAILABLE), ("mistralai", MISTRAL_AVAILABLE)]
                if not ok]
     if missing:
-        st.warning(f"⚠️ Manglende pakker: {', '.join(missing)}")
-        st.info(f"Installer med: `pip install {' '.join(missing)}`")
+        st.warning(f"⚠️ Følgende udbydere er ikke tilgængelige: {', '.join(missing)}")
+        for pkg in missing:
+            reason = IMPORT_ERRORS.get(pkg)
+            if reason:
+                st.caption(f"`{pkg}`: {reason}")
+        st.info(f"Tjek at pakkerne er installeret: `pip install {' '.join(missing)}`")
 
     if "model_keys" not in st.secrets:
         st.error("❌ API-nøgler er ikke konfigureret. Tilføj dem i secrets.toml under [model_keys].")
