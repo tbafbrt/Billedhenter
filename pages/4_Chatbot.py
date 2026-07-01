@@ -1,6 +1,7 @@
-import streamlit as st
 import os
-import time
+import base64
+
+import streamlit as st
 from auth import AuthManager
 
 # Import API clients
@@ -26,263 +27,322 @@ except ImportError:
 os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
 os.environ["STREAMLIT_SERVER_RUN_ON_SAVE"] = "false"
 
-# Configure Streamlit page
-st.set_page_config(
-    page_title="T&R Værktøjer - TænkGPT Chatbot",
-    page_icon="💬",
-    layout="wide"
+st.set_page_config(page_title="T&R Værktøjer - TænkGPT Chatbot", page_icon="💬", layout="wide")
+
+MAX_TOKENS = 4096
+GREETING = {"role": "assistant", "content": "Hej der! Jeg er din chatbot. Hvad kan jeg hjælpe dig med?"}
+SYSTEM_PROMPT = (
+    "Du er en hjælpsom assistent for medarbejdere i Forbrugerrådet Tænk. "
+    "Svar klart og præcist på dansk, medmindre brugeren skriver på et andet sprog."
 )
 
-# Initialize session state
+# Model-register: model-id -> udbyder + pris (input/output pr. mio. tokens).
+# Claude-modellerne er de aktuelle (de gamle claude-3-* er udgået og fejler).
+MODELS = {
+    # Mistral (-latest-aliaser auto-opdaterer til nyeste version)
+    "mistral-large-latest":  {"provider": "mistral",   "price": "$8/$24"},
+    "mistral-medium-latest": {"provider": "mistral",   "price": "$2.5/$7.5"},
+    # Anthropic Claude
+    "claude-haiku-4-5":      {"provider": "anthropic", "price": "$1/$5"},
+    "claude-sonnet-4-6":     {"provider": "anthropic", "price": "$3/$15"},
+    "claude-opus-4-8":       {"provider": "anthropic", "price": "$5/$25"},
+    # OpenAI
+    "gpt-4o-mini":           {"provider": "openai",    "price": "$1/$3"},
+    "gpt-4.1-nano":          {"provider": "openai",    "price": "$1/$5"},
+    "gpt-4o":                {"provider": "openai",    "price": "$5/$15"},
+    "gpt-4.1-mini":          {"provider": "openai",    "price": "$5/$15"},
+    "gpt-4.1":               {"provider": "openai",    "price": "$10/$30"},
+}
+
+# Hvilke udbydere kan hvad med vedhæftninger
+DOC_SUPPORT = {
+    "anthropic": {"text", "image", "pdf"},
+    "openai":    {"text", "image"},
+    "mistral":   {"text"},
+}
+
+
+# ---------------------------------------------------------------------------
+# Session state
+# ---------------------------------------------------------------------------
 def init_session_state():
-    """Initialize all session state variables"""
     defaults = {
-        'logged_in': False,
-        'jwt_token': None,
-        'api_authenticated': False,
-        'search_results': {},
-        'selected_images': set(),
-        'image_keys_registry': {},
-        'current_page': 'chatbot',
-        'messages': [{"role": "assistant", "content": "Hej der! Jeg er din chatbot. Hvad kan jeg hjælpe dig med?"}]
+        "logged_in": False,
+        "current_page": "chatbot",
+        "messages": [dict(GREETING)],
     }
-    
-    for key, default_value in defaults.items():
+    for key, value in defaults.items():
         if key not in st.session_state:
-            st.session_state[key] = default_value
+            st.session_state[key] = value
 
-def add_dollar_signs(model):
-    """Add pricing information to model names"""
-    pricing = {
-        # Mistral models
-        "mistral-medium-latest": "($2.5/$7.5)",
-        "mistral-large-latest": "($8/$24)",
-                
-        # Anthropic models
-        "claude-3-5-haiku-latest": "($0.25/$1.25)", 
-        "claude-3-5-sonnet-latest": "($3/$15)",
-        "claude-3-7-sonnet-latest": "($4/$20)",
-        "claude-3-opus-latest": "($15/$75)",
-        
-        # OpenAI models
-        "gpt-4o-mini": "($1/$3)",
-        "gpt-4.1-nano": "($1/$5)",
-        "gpt-4o": "($5/$15)",
-        "gpt-4.1-mini": "($5/$15)",
-        "gpt-4.1": "($10/$30)"
-    }
-    return f"{model} {pricing.get(model, '')}"
 
+# ---------------------------------------------------------------------------
+# Modeller
+# ---------------------------------------------------------------------------
 def get_available_models():
-    """Get list of available models based on installed packages"""
-    models = []
-    
-    if MISTRAL_AVAILABLE:
-        models.extend([
-            "mistral-medium-latest",
-            "mistral-large-latest",
-        ])
-    
-    if ANTHROPIC_AVAILABLE:
-        models.extend([
-            "claude-3-5-haiku-latest", 
-            "claude-3-5-sonnet-latest", 
-            "claude-3-7-sonnet-latest",
-            "claude-3-opus-latest",
-        ])
-    
-    if OPENAI_AVAILABLE:
-        models.extend([
-            "gpt-4o-mini", 
-            "gpt-4.1-nano",
-            "gpt-4o", 
-            "gpt-4.1-mini",
-            "gpt-4.1"
-        ])
-    
-    return models
+    """Modeller hvis udbyder-pakke er installeret, i rækkefølgen Mistral → Claude → OpenAI."""
+    available = {"mistral": MISTRAL_AVAILABLE, "anthropic": ANTHROPIC_AVAILABLE, "openai": OPENAI_AVAILABLE}
+    return [m for m, info in MODELS.items() if available.get(info["provider"])]
 
+
+def format_model(model):
+    return f"{model} ({MODELS[model]['price']})"
+
+
+# ---------------------------------------------------------------------------
+# Vedhæftninger
+# ---------------------------------------------------------------------------
+def read_attachment(uploaded_file):
+    """Læs en uploadet fil til en attachment-dict, eller None."""
+    if not uploaded_file:
+        return None
+    raw = uploaded_file.getvalue()
+    ext = uploaded_file.name.lower().rsplit(".", 1)[-1]
+    if ext in ("txt", "md", "csv"):
+        return {"kind": "text", "name": uploaded_file.name, "text": raw.decode("utf-8", "replace")}
+    if ext == "pdf":
+        return {"kind": "pdf", "name": uploaded_file.name,
+                "b64": base64.b64encode(raw).decode(), "mime": "application/pdf"}
+    mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp"}.get(ext, "image/jpeg")
+    return {"kind": "image", "name": uploaded_file.name,
+            "b64": base64.b64encode(raw).decode(), "mime": mime}
+
+
+def api_history(messages):
+    """Historik til API'et: drop den indledende assistant-hilsen (Claude kræver at samtalen starter med user)."""
+    msgs = list(messages)
+    if msgs and msgs[0]["role"] == "assistant":
+        msgs = msgs[1:]
+    return msgs
+
+
+# ---------------------------------------------------------------------------
+# Byg provider-specifikke beskeder
+# ---------------------------------------------------------------------------
+def build_claude_messages(history, attachment):
+    out = []
+    for i, m in enumerate(history):
+        last = i == len(history) - 1
+        if last and m["role"] == "user" and attachment:
+            blocks = []
+            if attachment["kind"] == "pdf":
+                blocks.append({"type": "document", "source": {
+                    "type": "base64", "media_type": "application/pdf", "data": attachment["b64"]}})
+            elif attachment["kind"] == "image":
+                blocks.append({"type": "image", "source": {
+                    "type": "base64", "media_type": attachment["mime"], "data": attachment["b64"]}})
+            elif attachment["kind"] == "text":
+                blocks.append({"type": "text",
+                               "text": f"Vedhæftet dokument ({attachment['name']}):\n\n{attachment['text']}"})
+            blocks.append({"type": "text", "text": m["content"]})
+            out.append({"role": "user", "content": blocks})
+        else:
+            out.append({"role": m["role"], "content": m["content"]})
+    return out
+
+
+def build_openai_messages(history, attachment):
+    out = [{"role": "system", "content": SYSTEM_PROMPT}]
+    for i, m in enumerate(history):
+        last = i == len(history) - 1
+        if last and m["role"] == "user" and attachment and attachment["kind"] == "image":
+            out.append({"role": "user", "content": [
+                {"type": "text", "text": m["content"]},
+                {"type": "image_url", "image_url": {"url": f"data:{attachment['mime']};base64,{attachment['b64']}"}},
+            ]})
+        elif last and m["role"] == "user" and attachment and attachment["kind"] == "text":
+            out.append({"role": "user",
+                        "content": f"Vedhæftet dokument ({attachment['name']}):\n\n{attachment['text']}\n\n{m['content']}"})
+        else:
+            out.append({"role": m["role"], "content": m["content"]})
+    return out
+
+
+def build_mistral_messages(history, attachment):
+    out = [{"role": "system", "content": SYSTEM_PROMPT}]
+    for i, m in enumerate(history):
+        last = i == len(history) - 1
+        if last and m["role"] == "user" and attachment and attachment["kind"] == "text":
+            out.append({"role": "user",
+                        "content": f"Vedhæftet dokument ({attachment['name']}):\n\n{attachment['text']}\n\n{m['content']}"})
+        else:
+            out.append({"role": m["role"], "content": m["content"]})
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Streaming-generatorer (yield tekst-bidder → st.write_stream)
+# ---------------------------------------------------------------------------
+def stream_claude(model, messages):
+    client = Anthropic(api_key=st.secrets["model_keys"]["anthropic_api_key"])
+    with client.messages.stream(
+        model=model, max_tokens=MAX_TOKENS, system=SYSTEM_PROMPT, messages=messages
+    ) as stream:
+        for text in stream.text_stream:
+            yield text
+
+
+def stream_openai(model, messages):
+    client = OpenAI(api_key=st.secrets["model_keys"]["openai_api_key"])
+    response = client.chat.completions.create(model=model, messages=messages, stream=True)
+    for chunk in response:
+        delta = chunk.choices[0].delta.content
+        if delta:
+            yield delta
+
+
+def stream_mistral(model, messages):
+    client = Mistral(api_key=st.secrets["model_keys"]["mistral_api_key"])
+    response = client.chat.complete(model=model, messages=messages)
+    yield response.choices[0].message.content
+
+
+# ---------------------------------------------------------------------------
+# UI
+# ---------------------------------------------------------------------------
+def render_intro(available_models):
+    st.title("T&R TænkGPT Chatbot 💬")
+    st.markdown(
+        "Det er din nye chatbot! Hvis du nogensinde har undret dig over hvad GPT står for, "
+        "så er det Gitte Peter Thomas."
+    )
+    st.markdown(
+        f"""
+        På denne side kan du chatte med **{len(available_models)} forskellige sprogmodeller** fra
+        OpenAI, Anthropic og Mistral. Den fungerer nogenlunde som når du logger ind på ChatGPT,
+        Claude eller Mistral. Du kan også **vedhæfte et dokument** (PDF, billede eller tekst) og
+        få modellen til at analysere det.
+
+        I model-menuen står prisen som *(input / output per million tokens)* — det behøver du ikke
+        tænke så meget over; de er alle billige. Det er mest en indikation af hvor avanceret modellen
+        er. Til det meste behøver man ikke den mest avancerede.
+        """
+    )
+
+
+def render_model_help():
+    with st.expander("Fold ud for en kort forklaring om de enkelte modeller", expanded=False):
+        st.markdown(
+            """
+            ##### Fra Mistral AI (fransk — støt europæiske produkter 🙂)
+            - **Mistral Large**: Nyeste ræsonneringsmodel til opgaver med høj kompleksitet.
+            - **Mistral Medium**: Nyeste version af den billigere Mistral-model.
+
+            ##### Fra Anthropic (Claude)
+            - **Claude Haiku 4.5**: Hurtig og økonomisk — oplagt til hurtige svar på almindelige spørgsmål.
+            - **Claude Sonnet 4.6**: God balance mellem hastighed og dybde til de fleste opgaver.
+            - **Claude Opus 4.8**: Anthropics mest kapable model til de mest krævende opgaver.
+
+            ##### Fra OpenAI
+            - **GPT-4o Mini / GPT-4.1 Nano**: Hurtige, økonomiske modeller til enkle opgaver.
+            - **GPT-4o / GPT-4.1 Mini**: Solide standardmodeller til de fleste opgaver.
+            - **GPT-4.1**: Den smarteste til komplekse opgaver.
+            """
+        )
 
 
 def show():
-    """Display the chatbot page"""
-    st.title("T&R TænkGPT Chatbot 💬")
-    
-    help_text = '''
-    Det er din nye chatbot!
-    Hvis du nogensinde har undret dig over hvad GPT står for så er det Gitte Peter Thomas
-    '''
-    
-    st.markdown(help_text)
-    
-    # Check for missing packages
-    missing_packages = []
-    if not OPENAI_AVAILABLE:
-        missing_packages.append("openai")
-    if not ANTHROPIC_AVAILABLE:
-        missing_packages.append("anthropic")
-    if not MISTRAL_AVAILABLE:
-        missing_packages.append("mistralai")
-    
-    if missing_packages:
-        st.warning(f"⚠️ **Manglende pakker**: {', '.join(missing_packages)}")
-        st.info(f"Installer med: `pip install {' '.join(missing_packages)}`")
-    
-    # Simple API key check without exposing keys
-    api_keys_configured = True
-    try:
-        # Test if secrets exist without accessing values
-        if "model_keys" not in st.secrets:
-            api_keys_configured = False
-    except:
-        api_keys_configured = False
-
-    if not api_keys_configured:
-        st.error("❌ API keys ikke konfigureret korrekt")
-        st.info("Konfigurer dine API keys i secrets.toml")
-        return
-    
-    # Get available models
-    available_models = get_available_models()
-    
-    if not available_models:
-        st.error("❌ Ingen modeller tilgængelige. Installer påkrævede pakker og konfigurer API keys.")
-        return
-    
-    st.markdown("""
-                På denne side kan du chatte med 11 forskellige sprogmodeller fra OpenAI, Anthropic og Mistral. Den fungere nogenlunde 
-                som de almindelige chatbogst når du logger ind på chatGPT Claude eller Mistral, men den er mere basic. Så ingen upload 
-                af dokumenter eller den slags.<br><br>
-                I menuen hvor du kan vælge model står der "(pris input / output per million tokens)" det behøver du ikke tænke så 
-                meget over, de er alle meget billige, det er mere en indikation for hvor anvanceret modellen er. Til det meste behøver 
-                man ikke den mest avancerede model.
-        """, unsafe_allow_html=True)
-
-    st.subheader("Vælg din foretrukne sprogmodel 🚀")
-
-    # Model information expander
-    with st.expander("Fold ud for at se en kort forklaring om de enkelte modeller du kan vælge imellem", expanded=False):
-        st.markdown("""
-            ##### Fra Mistral AI: 
-            **Fransk virksomhed - støtt europæiske produkter :)**
-            - **Mistral Large**: Nyeste resoneringsmodel til opgaver med høj kompleksitet.
-            - **Mistral Medium**: Nyeste version af den billigere Midstral model.
-            
-            ##### Fra Anthropic Claude:
-            - **Claude 3.5 Haiku**: Hurtig, god og meget økonomisk, det oplagte valg hurtige svar på almindelige spørgsmål.
-            - **Claude 3.5 Sonnet**: Optimal balance mellem hastighed og dybde, til komplekse, mangefacetterede opgaver
-            - **Claude 3.7 Sonnet**: Claudes mest intelligente model til dato.
-            - **Claude 3 Opus**: Avancerede funktioner, der tackler de mest krævende resonneringsopgaver og dataintensive scenarier.
-
-            ##### Fra OpenAI:
-            - **GPT-4o Mini**: OpenAIs hurtigste, omkostningseffektive resonneringsmodel med stærk præstation inden for matematik, kodning og billedforståelse
-            - **GPT-4o**: Standardmodel velegnet til de fleste opgaver
-            - **GPT-4.1**: Smarteste model til komplekse opgaver
-            - **GPT-4.1 Mini**: Prisvenlig model der balancerer hastighed og intelligens
-            - **GPT-4.1 Nano**: Hurtigste, mest omkostningseffektive model til opgaver med lav latenstid
-        """, unsafe_allow_html=True)
-
-    # Model selection
-    selected_model = st.selectbox(
-        "Herunder kan du vælge hvilken model du vil bruge:",
-        options=available_models, 
-        format_func=add_dollar_signs
+    # Centrér og afgræns hovedkolonnen, så chatten ligner en "rigtig" chat-app
+    st.markdown(
+        """
+        <style>
+        .block-container { max-width: 820px; margin: 0 auto; padding-top: 2.5rem; }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
-    # Display chat messages
+    # Tjek pakker og API-nøgler
+    missing = [name for name, ok in
+               [("openai", OPENAI_AVAILABLE), ("anthropic", ANTHROPIC_AVAILABLE), ("mistralai", MISTRAL_AVAILABLE)]
+               if not ok]
+    if missing:
+        st.warning(f"⚠️ Manglende pakker: {', '.join(missing)}")
+        st.info(f"Installer med: `pip install {' '.join(missing)}`")
+
+    if "model_keys" not in st.secrets:
+        st.error("❌ API-nøgler er ikke konfigureret. Tilføj dem i secrets.toml under [model_keys].")
+        return
+
+    available_models = get_available_models()
+    if not available_models:
+        st.error("❌ Ingen modeller tilgængelige. Installer pakkerne og konfigurer API-nøgler.")
+        return
+
+    render_intro(available_models)
+
+    st.subheader("Vælg din foretrukne sprogmodel 🚀")
+    render_model_help()
+
+    selected_model = st.selectbox(
+        "Vælg model:", options=available_models, format_func=format_model
+    )
+    provider = MODELS[selected_model]["provider"]
+
+    uploaded_file = st.file_uploader(
+        "📎 Vedhæft et dokument (valgfrit) — gælder dit næste spørgsmål",
+        type=["pdf", "png", "jpg", "jpeg", "webp", "txt", "md", "csv"],
+    )
+    attachment = read_attachment(uploaded_file)
+
+    # Vis chat-historik
     for msg in st.session_state.messages:
         st.chat_message(msg["role"]).write(msg["content"])
 
-    # Get user input
     if prompt := st.chat_input("Skriv dit spørgsmål her... Lav linjeskift med shift+enter."):
-        # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": prompt})
-        st.chat_message("user").write(prompt)
-        
-        try:
-            # Determine provider and initialize client based on selected model
-            if "gpt" in selected_model:
-                if not OPENAI_AVAILABLE:
-                    st.error("OpenAI pakke ikke installeret")
-                    return
-                
-                client = OpenAI(api_key=st.secrets["model_keys"]["openai_api_key"])
-                response = client.chat.completions.create(
-                    model=selected_model,
-                    messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
-                )
-                msg = response.choices[0].message.content
-                
-            elif "claude" in selected_model:
-                if not ANTHROPIC_AVAILABLE:
-                    st.error("Anthropic pakke ikke installeret")
-                    return
-                
-                client = Anthropic(api_key=st.secrets["model_keys"]["anthropic_api_key"])
-                messages = []
-                for m in st.session_state.messages:
-                    if m["role"] == "assistant":
-                        messages.append({"role": "assistant", "content": m["content"]})
-                    else:
-                        messages.append({"role": "user", "content": m["content"]})
-                
-                response = client.messages.create(
-                    model=selected_model,
-                    messages=messages,
-                    max_tokens=1000  # Adding required max_tokens parameter
-                )
-                msg = response.content[0].text
-                
-            elif "mistral" in selected_model:
-                if not MISTRAL_AVAILABLE:
-                    st.error("Mistral pakke ikke installeret")
-                    return
-                
-                client = Mistral(api_key=st.secrets["model_keys"]["mistral_api_key"])
-                messages = []
-                for m in st.session_state.messages:
-                    messages.append({
-                        "role": m["role"],
-                        "content": m["content"]
-                    })
-                
-                # Use the chat.complete method as per Mistral documentation
-                chat_response = client.chat.complete(
-                    model=selected_model,
-                    messages=messages
-                )
-                    
-                # Extract the response
-                msg = chat_response.choices[0].message.content
-            
-            else:
-                st.error(f"Ukendt model: {selected_model}")
-                return
-                
-            # Add assistant response to chat history
-            st.session_state.messages.append({"role": "assistant", "content": msg})
-            st.chat_message("assistant").write(msg)
+        with st.chat_message("user"):
+            st.write(prompt)
+            if attachment:
+                st.caption(f"📎 {attachment['name']}")
 
+        # Kan den valgte model håndtere vedhæftningen?
+        attachment_for_call = attachment
+        if attachment and attachment["kind"] not in DOC_SUPPORT[provider]:
+            if attachment["kind"] == "pdf":
+                st.warning("📄 PDF understøttes kun af Claude-modellerne. Vælg en Claude-model, "
+                           "eller upload teksten som .txt.")
+            elif attachment["kind"] == "image":
+                st.warning("🖼️ Billeder understøttes ikke af den valgte model. Vælg en Claude- eller GPT-model.")
+            attachment_for_call = None
+
+        history = api_history(st.session_state.messages)
+
+        try:
+            with st.chat_message("assistant"):
+                if provider == "anthropic":
+                    messages = build_claude_messages(history, attachment_for_call)
+                    full = st.write_stream(stream_claude(selected_model, messages))
+                elif provider == "openai":
+                    messages = build_openai_messages(history, attachment_for_call)
+                    full = st.write_stream(stream_openai(selected_model, messages))
+                else:  # mistral
+                    messages = build_mistral_messages(history, attachment_for_call)
+                    full = st.write_stream(stream_mistral(selected_model, messages))
+            st.session_state.messages.append({"role": "assistant", "content": full})
         except Exception as e:
-            error_msg = f"Fejl: {str(e)}"
-            st.error(error_msg)
-            
-            # Provide helpful error messages
-            if "api_key" in str(e).lower() or "unauthorized" in str(e).lower():
-                st.warning("🔑 API key problem. Tjek at dine API keys er korrekte i secrets.toml")
-            elif "quota" in str(e).lower() or "rate limit" in str(e).lower():
-                st.warning("📊 Rate limit eller kvote overskredet. Prøv igen om lidt eller opgrader din plan.")
-            elif "connection" in str(e).lower() or "network" in str(e).lower():
+            msg = str(e)
+            st.error(f"Fejl: {msg}")
+            low = msg.lower()
+            if "api_key" in low or "unauthorized" in low or "authentication" in low:
+                st.warning("🔑 API-nøgle-problem. Tjek nøglerne i secrets.toml.")
+            elif "quota" in low or "rate limit" in low:
+                st.warning("📊 Rate limit eller kvote overskredet. Prøv igen om lidt.")
+            elif "connection" in low or "network" in low:
                 st.warning("🌐 Netværksproblem. Tjek din internetforbindelse.")
             else:
-                st.info("💡 Prøv at vælge en anden model eller kontakt support.")
+                st.info("💡 Prøv en anden model, eller kontakt support.")
 
-    # Chat controls
+    # Kontroller
     st.markdown("---")
-    col1, col2, col3 = st.columns([1, 1, 2])
-    
+    if st.button("🗑️ Ryd chat"):
+        st.session_state.messages = [dict(GREETING)]
+        st.rerun()
 
-# Main execution
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 init_session_state()
 auth = AuthManager()
 
