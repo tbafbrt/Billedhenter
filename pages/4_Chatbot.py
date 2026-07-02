@@ -1,4 +1,5 @@
 import os
+import json
 import base64
 
 import requests
@@ -200,15 +201,30 @@ def stream_openai(model, messages):
 
 
 def stream_mistral(model, messages):
+    # Mistral leverer svaret som Server-Sent Events (SSE): linjer der starter
+    # med "data:" og indeholder en bid af svaret, afsluttet med "data: [DONE]".
     api_key = st.secrets["model_keys"]["mistral_api_key"]
-    response = requests.post(
+    with requests.post(
         MISTRAL_API_URL,
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json={"model": model, "messages": messages},
+        json={"model": model, "messages": messages, "stream": True},
+        stream=True,
         timeout=60,
-    )
-    response.raise_for_status()
-    yield response.json()["choices"][0]["message"]["content"]
+    ) as response:
+        response.raise_for_status()
+        for line in response.iter_lines(decode_unicode=True):
+            if not line or not line.startswith("data:"):
+                continue
+            data = line[len("data:"):].strip()
+            if data == "[DONE]":
+                break
+            try:
+                chunk = json.loads(data)
+            except json.JSONDecodeError:
+                continue
+            delta = chunk["choices"][0]["delta"].get("content")
+            if delta:
+                yield delta
 
 
 # ---------------------------------------------------------------------------
